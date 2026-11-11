@@ -36,8 +36,8 @@ type OverInfo = {
   cause: "water" | "traffic";
 };
 
-const ROOFS = ["#e25b45", "#c44738", "#3d7ec4", "#e2a317", "#8d4d32", "#2f6f4a"];
-const WALLS = ["#fff6e8", "#f3d7b0", "#f7f1e4", "#efe2c4", "#f8e6cf", "#e7dcc4"];
+const ROOFS = ["#d86a4e", "#b84e3e", "#4b83b8", "#dda83d", "#a96b48", "#4f8b58"];
+const WALLS = ["#ffe2b2", "#f4c88d", "#f1eadc", "#ecd59d", "#f1cbbd", "#d4e3bb"];
 const CARS = ["#e25b45", "#f7f1e4", "#3d7ec4", "#ffd23f", "#2f9a4a", "#6b3e26"];
 
 const FONT: Record<string, string[]> = {
@@ -113,7 +113,7 @@ function drawText(
 
 function solid(kind: Kind | "void" | null): boolean {
   if (!kind || kind === "void") return true;
-  return kind !== "street" && kind !== "plaza";
+  return kind !== "street" && kind !== "plaza" && kind !== "escalera" && kind !== "pasarela" && kind !== "azotea";
 }
 
 function drawCell(
@@ -133,7 +133,12 @@ function drawCell(
   const east = tileAt(world, col + 1, row)?.kind ?? "void";
   const west = tileAt(world, col - 1, row)?.kind ?? "void";
   if (kind === "street") drawStreet(ctx, x, y, tile, cell?.v ?? 0, !solid(north), !solid(south), !solid(east), !solid(west));
-  else if (kind === "plaza") drawPlaza(ctx, x, y, tile, cell?.v ?? 0);
+  else if (kind === "pasarela") drawStreet(ctx, x, y, tile, cell?.v ?? 0, !solid(north), !solid(south), !solid(east), !solid(west));
+  else if (kind === "azotea") drawRooftop(ctx, x, y, tile, cell?.v ?? 0);
+  else if (kind === "escalera") {
+    drawStreet(ctx, x, y, tile, cell?.v ?? 0, !solid(north), !solid(south), !solid(east), !solid(west));
+    drawStair(ctx, x, y, tile, cell?.v ?? 0);
+  } else if (kind === "plaza") drawPlaza(ctx, x, y, tile, cell?.v ?? 0);
   else if (kind === "tree") drawTree(ctx, x, y, tile);
   else if (kind === "fountain") drawFountain(ctx, x, y, tile, time);
   else if (
@@ -152,6 +157,24 @@ function drawCell(
   if (cell?.kind === "comercio" && !solid(south) && (cell.v + col) % 2 === 0) {
     const sector = Math.floor(row / SECTOR_H);
     drawText(ctx, shopName(col, row, sector), x + tile / 2, y + 3, Math.max(1, Math.floor(tile / 18)), "#1a120c");
+  }
+
+  // En pantallas grandes, los obstáculos llevan una etiqueta breve para que se entiendan de inmediato.
+  if (cell && tile >= 22) {
+    const labels: Partial<Record<Kind, string>> = {
+      auto: "AUTO",
+      obra: "OBRA",
+      contenedor: "TACHO",
+      bache: "POZO",
+      poste: "LUZ",
+      escombro: "ESCOM",
+    };
+    const label = labels[cell.kind];
+    if (label) {
+      ctx.fillStyle = "rgba(26,18,12,.86)";
+      ctx.fillRect(x + 1, y + tile - 9, tile - 2, 8);
+      drawText(ctx, label, x + tile / 2, y + tile - 8, 1, "#fff6e8");
+    }
   }
 }
 
@@ -240,18 +263,26 @@ function drawPlaza(ctx: CanvasRenderingContext2D, x: number, y: number, tile: nu
 }
 
 function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
-  ctx.fillStyle = "#2f8a44";
+  ctx.fillStyle = "#398f45";
   ctx.fillRect(x, y, tile, tile);
-  ctx.fillStyle = "#6b4428";
-  ctx.fillRect(x + (tile >> 1) - 2, y + tile - 9, 4, 8);
-  ctx.fillStyle = "#1d6338";
-  ctx.fillRect(x + 3, y + 7, tile - 6, 9);
-  ctx.fillStyle = "#217a3a";
-  ctx.fillRect(x + 5, y + 4, tile - 10, 6);
-  ctx.fillStyle = "#8dce6a";
-  ctx.fillRect(x + 7, y + 5, 3, 3);
-  ctx.fillStyle = "#e25b45";
-  ctx.fillRect(x + tile - 9, y + 10, 2, 2);
+  ctx.fillStyle = "rgba(20,65,31,.35)";
+  ctx.fillRect(x + tile * 0.18, y + tile * 0.79, tile * 0.68, 3);
+  ctx.fillStyle = "#704329";
+  ctx.fillRect(x + tile * 0.43, y + tile * 0.52, tile * 0.16, tile * 0.4);
+  ctx.fillStyle = "#4e321e";
+  ctx.fillRect(x + tile * 0.38, y + tile * 0.85, tile * 0.26, 3);
+  ctx.fillStyle = "#185d35";
+  ctx.fillRect(x + tile * 0.15, y + tile * 0.28, tile * 0.7, tile * 0.43);
+  ctx.fillRect(x + tile * 0.25, y + tile * 0.13, tile * 0.5, tile * 0.38);
+  ctx.fillStyle = "#23773c";
+  ctx.fillRect(x + tile * 0.23, y + tile * 0.2, tile * 0.55, tile * 0.45);
+  ctx.fillRect(x + tile * 0.34, y + tile * 0.1, tile * 0.35, tile * 0.35);
+  ctx.fillStyle = "#5eaa50";
+  ctx.fillRect(x + tile * 0.31, y + tile * 0.17, tile * 0.17, tile * 0.13);
+  ctx.fillRect(x + tile * 0.56, y + tile * 0.31, tile * 0.15, tile * 0.1);
+  ctx.fillRect(x + tile * 0.2, y + tile * 0.43, tile * 0.13, tile * 0.1);
+  ctx.fillStyle = "#d95043";
+  ctx.fillRect(x + tile * 0.69, y + tile * 0.48, 3, 3);
 }
 
 function drawFountain(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, time: number) {
@@ -273,19 +304,32 @@ function drawFountain(ctx: CanvasRenderingContext2D, x: number, y: number, tile:
 
 function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
   const body = CARS[v % CARS.length]!;
-  const top = y + (tile >> 1) - 6;
-  ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 3, top, tile - 6, 12);
+  const left = x + tile * 0.16;
+  const top = y + tile * 0.27;
+  const width = tile * 0.68;
+  const height = tile * 0.48;
+  ctx.fillStyle = "rgba(0,0,0,.36)";
+  ctx.fillRect(left + 2, top + height, width - 2, 3);
+  ctx.fillStyle = "#171615";
+  ctx.fillRect(left - 2, top + 4, width + 4, height - 5);
+  ctx.fillRect(left + 3, top + 1, width - 6, height - 1);
   ctx.fillStyle = body;
-  ctx.fillRect(x + 4, top + 1, tile - 8, 10);
-  ctx.fillStyle = "#9fd4ee";
-  ctx.fillRect(x + 6, top + 2, 5, 4);
-  ctx.fillRect(x + tile - 11, top + 2, 5, 4);
-  ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 5, top + 9, 4, 3);
-  ctx.fillRect(x + tile - 9, top + 9, 4, 3);
-  ctx.fillStyle = "#ffd23f";
-  ctx.fillRect(x + tile - 7, top + 4, 2, 2);
+  ctx.fillRect(left, top + 3, width, height - 6);
+  ctx.fillRect(left + 3, top + 1, width - 6, height - 2);
+  ctx.fillStyle = "#202b35";
+  ctx.fillRect(left + width * 0.2, top + 4, width * 0.6, height - 8);
+  ctx.fillStyle = "#a8d7e8";
+  ctx.fillRect(left + width * 0.24, top + 5, width * 0.52, height * 0.3);
+  ctx.fillStyle = "#66899a";
+  ctx.fillRect(left + width * 0.49, top + 5, 2, height - 10);
+  ctx.fillStyle = "#f8e5a6";
+  ctx.fillRect(left + 2, top + height - 7, 3, 3);
+  ctx.fillRect(left + width - 5, top + height - 7, 3, 3);
+  ctx.fillStyle = "#f05a4e";
+  ctx.fillRect(left + 2, top + 2, 3, 2);
+  ctx.fillRect(left + width - 5, top + 2, 3, 2);
+  ctx.fillStyle = "#d9d0c2";
+  ctx.fillRect(left + width * 0.22, top + height - 4, width * 0.56, 2);
 }
 
 function drawTrafficCar(
@@ -296,9 +340,10 @@ function drawTrafficCar(
   variant: number,
   direction: -1 | 1,
   time: number,
+  underBridge = false,
 ) {
-  const length = tile * 0.88;
-  const height = tile * 0.46;
+  const length = tile * (underBridge ? 0.78 : 0.88);
+  const height = tile * (underBridge ? 0.3 : 0.46);
   const left = cx - length / 2;
   const top = cy - height / 2;
   const body = CARS[variant % CARS.length]!;
@@ -329,68 +374,187 @@ function drawTrafficCar(
 }
 
 function drawBin(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
-  const left = x + tile * 0.25;
-  const top = y + tile * 0.28;
-  const width = tile * 0.5;
-  const height = tile * 0.48;
-  ctx.fillStyle = "#1a120c";
-  ctx.fillRect(left - 2, top + 2, width + 4, height);
-  ctx.fillStyle = v % 2 ? "#526a61" : "#607b70";
-  ctx.fillRect(left, top + 3, width, height - 2);
-  ctx.fillStyle = "#8fa89a";
-  ctx.fillRect(left - 1, top, width + 2, 4);
-  ctx.fillStyle = "#34483f";
-  for (let i = 1; i <= 3; i++) ctx.fillRect(left + i * (width / 4), top + 6, 1, height - 7);
-  ctx.fillStyle = "#d8d0bd";
-  ctx.fillRect(left + width - 4, top + 7, 2, 4);
+  const left = x + tile * 0.2;
+  const top = y + tile * 0.24;
+  const width = tile * 0.6;
+  const height = tile * 0.56;
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  ctx.fillRect(left + 2, top + height, width, 3);
+  ctx.fillStyle = "#202b2b";
+  ctx.fillRect(left - 2, top + 3, width + 4, height - 1);
+  ctx.fillStyle = v % 2 ? "#477f63" : "#287d57";
+  ctx.fillRect(left, top + 5, width, height - 5);
+  ctx.fillStyle = "#9fbea8";
+  ctx.fillRect(left - 2, top + 1, width + 4, 5);
+  ctx.fillStyle = "#1d583f";
+  ctx.fillRect(left + 3, top + 8, width - 6, height - 12);
+  ctx.fillStyle = "#d9eadb";
+  ctx.fillRect(left + width - 7, top + 9, 3, 6);
+  ctx.fillRect(left + 4, top + height - 5, width - 8, 2);
+  ctx.fillStyle = "#f5f0dc";
+  ctx.fillRect(left + width / 2 - 3, top + 11, 6, 5);
+  ctx.fillStyle = "#287d57";
+  ctx.fillRect(left + width / 2 - 1, top + 12, 2, 3);
 }
 
 function drawPothole(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
-  ctx.fillStyle = "#d7c49a";
-  ctx.fillRect(x + tile * 0.2, y + tile * 0.31, tile * 0.61, tile * 0.39);
-  ctx.fillStyle = "#292722";
-  ctx.fillRect(x + tile * 0.25, y + tile * 0.34, tile * 0.5, tile * 0.31);
-  ctx.fillStyle = "#151412";
-  ctx.fillRect(x + tile * 0.34, y + tile * 0.39, tile * 0.31, tile * 0.2);
-  ctx.fillStyle = "#777065";
-  ctx.fillRect(x + tile * 0.29, y + tile * 0.35, tile * 0.12, 2);
+  ctx.fillStyle = "#d6c39a";
+  ctx.fillRect(x + tile * 0.13, y + tile * 0.3, tile * 0.74, tile * 0.48);
+  ctx.fillStyle = "#24231f";
+  ctx.fillRect(x + tile * 0.2, y + tile * 0.34, tile * 0.61, tile * 0.39);
+  ctx.fillStyle = "#11110f";
+  ctx.fillRect(x + tile * 0.29, y + tile * 0.39, tile * 0.43, tile * 0.29);
+  ctx.fillStyle = "#716b60";
+  ctx.fillRect(x + tile * 0.25, y + tile * 0.35, tile * 0.22, 2);
+  ctx.fillStyle = "#d9d1bd";
+  ctx.fillRect(x + tile * 0.09, y + tile * 0.25, tile * 0.16, 2);
+  ctx.fillRect(x + tile * 0.76, y + tile * 0.76, tile * 0.15, 2);
+  ctx.fillRect(x + tile * 0.16, y + tile * 0.73, 2, tile * 0.13);
 }
 
 function drawPole(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
-  ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + tile * 0.42, y + tile * 0.23, tile * 0.2, tile * 0.55);
-  ctx.fillStyle = "#8d8474";
-  ctx.fillRect(x + tile * 0.46, y + tile * 0.18, tile * 0.12, tile * 0.57);
-  ctx.fillStyle = "#d7c49a";
-  ctx.fillRect(x + tile * 0.22, y + tile * 0.3, tile * 0.56, 3);
-  ctx.fillStyle = "#ffd23f";
-  ctx.fillRect(x + tile * 0.47, y + tile * 0.12, tile * 0.1, tile * 0.1);
+  const cx = x + tile * 0.51;
+  ctx.fillStyle = "rgba(0,0,0,.28)";
+  ctx.fillRect(cx - 2, y + tile * 0.78, tile * 0.34, 3);
+  ctx.fillStyle = "#343a40";
+  ctx.fillRect(cx - 2, y + tile * 0.2, 4, tile * 0.61);
+  ctx.fillStyle = "#a6afb1";
+  ctx.fillRect(cx - 1, y + tile * 0.2, 2, tile * 0.58);
+  ctx.fillStyle = "#343a40";
+  ctx.fillRect(cx - 2, y + tile * 0.2, tile * 0.34, 3);
+  ctx.fillRect(cx + tile * 0.22, y + tile * 0.2, 3, 2);
+  ctx.fillRect(cx + tile * 0.22, y + tile * 0.2, 2, tile * 0.15);
+  ctx.fillStyle = "#3d4548";
+  ctx.fillRect(cx + tile * 0.13, y + tile * 0.29, tile * 0.24, 4);
+  ctx.fillStyle = "#ffe58a";
+  ctx.fillRect(cx + tile * 0.17, y + tile * 0.3, tile * 0.16, 2);
+  ctx.fillStyle = "rgba(255,225,120,.22)";
+  ctx.fillRect(cx + tile * 0.07, y + tile * 0.29, tile * 0.36, tile * 0.15);
 }
 
 function drawObra(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
-  ctx.fillStyle = "#e2a317";
-  ctx.fillRect(x + 2, y + 6, tile - 4, tile - 12);
-  ctx.fillStyle = "#1a120c";
-  for (let i = 0; i < 4; i++) ctx.fillRect(x + 3 + i * ((tile - 6) / 4), y + 7, 3, tile - 14);
-  ctx.fillStyle = "#f7f1e4";
-  ctx.fillRect(x + 4, y + tile - 10, tile - 8, 4);
+  const left = x + tile * 0.15;
+  const top = y + tile * 0.36;
+  const width = tile * 0.7;
+  const height = tile * 0.3;
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  ctx.fillRect(left + 2, top + height + 3, width, 3);
+  ctx.fillStyle = "#342a21";
+  ctx.fillRect(left + 3, top + height - 1, 4, tile * 0.19);
+  ctx.fillRect(left + width - 7, top + height - 1, 4, tile * 0.19);
+  ctx.fillStyle = "#e5a21d";
+  ctx.fillRect(left, top, width, height);
+  ctx.fillStyle = "#211b16";
+  ctx.fillRect(left + 2, top + 2, width - 4, height - 4);
+  ctx.fillStyle = "#f5eee0";
+  for (let i = 0; i < 4; i++) {
+    const stripeX = left + 3 + i * (width - 9) / 3;
+    ctx.fillRect(stripeX, top + 2, 3, height - 4);
+  }
   ctx.fillStyle = "#e25b45";
-  ctx.fillRect(x + (tile >> 1) - 1, y + 2, 2, 6);
-  ctx.fillStyle = "#ff5a4e";
-  ctx.fillRect(x + (tile >> 1) - 4, y + 2, 6, 3);
+  ctx.fillRect(x + tile * 0.4, y + tile * 0.12, tile * 0.2, tile * 0.17);
+  ctx.fillStyle = "#fff2cf";
+  ctx.fillRect(x + tile * 0.44, y + tile * 0.15, tile * 0.12, tile * 0.08);
 }
 
 function drawDebris(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
-  ctx.fillStyle = "#6b8f3a";
-  ctx.fillRect(x + 4, y + tile - 12, 7, 6);
+  ctx.fillStyle = "rgba(0,0,0,.3)";
+  ctx.fillRect(x + tile * 0.15, y + tile * 0.76, tile * 0.72, 3);
+  ctx.fillStyle = "#8b8478";
+  ctx.fillRect(x + tile * 0.16, y + tile * 0.56, tile * 0.3, tile * 0.17);
+  ctx.fillRect(x + tile * 0.36, y + tile * 0.43, tile * 0.34, tile * 0.2);
+  ctx.fillRect(x + tile * 0.56, y + tile * 0.58, tile * 0.26, tile * 0.14);
+  ctx.fillStyle = "#b6a997";
+  ctx.fillRect(x + tile * 0.2, y + tile * 0.58, tile * 0.2, 2);
+  ctx.fillRect(x + tile * 0.41, y + tile * 0.46, tile * 0.23, 2);
+  ctx.fillStyle = "#b65a40";
+  ctx.fillRect(x + tile * 0.27, y + tile * 0.34, tile * 0.3, tile * 0.13);
+  ctx.fillStyle = "#d47a54";
+  ctx.fillRect(x + tile * 0.3, y + tile * 0.36, tile * 0.23, 2);
+  ctx.fillStyle = "#6d8e51";
+  ctx.fillRect(x + tile * 0.62, y + tile * 0.29, tile * 0.18, tile * 0.13);
   ctx.fillStyle = "#3d7ec4";
-  ctx.fillRect(x + 12, y + tile - 14, 8, 7);
-  ctx.fillStyle = "#8d8474";
-  ctx.fillRect(x + 8, y + tile - 9, 10, 5);
-  ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 6, y + tile - 8, 2, 2);
-  ctx.fillStyle = "#e25b45";
-  ctx.fillRect(x + tile - 8, y + 8, 4, 4);
+  ctx.fillRect(x + tile * 0.08, y + tile * 0.68, tile * 0.28, tile * 0.08);
+}
+
+function drawRooftop(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
+  const roof = ROOFS[(v + 1) % ROOFS.length]!;
+  ctx.fillStyle = "#39261e";
+  ctx.fillRect(x + 1, y + 2, tile - 2, tile - 4);
+  ctx.fillStyle = roof;
+  ctx.fillRect(x + 3, y + 3, tile - 6, tile - 6);
+  ctx.fillStyle = "rgba(255,238,205,.24)";
+  for (let line = 0; line < 4; line++) ctx.fillRect(x + 4, y + 6 + line * Math.max(4, tile * 0.16), tile - 8, 1);
+  ctx.fillStyle = "#59372a";
+  ctx.fillRect(x + 4, y + tile * 0.42, tile - 8, 3);
+  ctx.fillStyle = "#e4ad72";
+  ctx.fillRect(x + 4, y + tile * 0.45, tile - 8, 1);
+  // Pasillo claro que indica que se puede caminar por arriba de las casas.
+  ctx.fillStyle = "#ead6a7";
+  ctx.fillRect(x + tile * 0.4, y + 4, tile * 0.2, tile - 8);
+  ctx.fillStyle = "#fff0c6";
+  ctx.fillRect(x + tile * 0.43, y + 5, 2, tile - 10);
+  // Claraboya y pequeño tanque de agua de azotea.
+  ctx.fillStyle = "#263a48";
+  ctx.fillRect(x + 5, y + 6, tile * 0.22, tile * 0.2);
+  ctx.fillStyle = "#9ed3e6";
+  ctx.fillRect(x + 6, y + 7, tile * 0.16, tile * 0.13);
+  ctx.fillStyle = "#526b78";
+  ctx.fillRect(x + tile * 0.68, y + tile * 0.63, tile * 0.2, tile * 0.16);
+  ctx.fillStyle = "#9eacb0";
+  ctx.fillRect(x + tile * 0.7, y + tile * 0.61, tile * 0.16, 2);
+}
+
+function drawStair(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
+  const left = x + tile * 0.18;
+  const right = x + tile * 0.82;
+  ctx.fillStyle = "#4a3020";
+  ctx.fillRect(left, y + tile * 0.17, 3, tile * 0.69);
+  ctx.fillRect(right - 3, y + tile * 0.17, 3, tile * 0.69);
+  ctx.fillStyle = "#b87943";
+  for (let i = 0; i < 5; i++) {
+    const stepY = y + tile * (0.24 + i * 0.115);
+    const inset = i * 1.5;
+    ctx.fillRect(left + inset, stepY, right - left - inset * 2, Math.max(2, tile * 0.07));
+    ctx.fillStyle = "#e3b36e";
+    ctx.fillRect(left + inset + 1, stepY, right - left - inset * 2 - 2, 1);
+    ctx.fillStyle = "#b87943";
+  }
+  ctx.fillStyle = "#ffd23f";
+  const ax = x + tile * 0.5;
+  const ay = y + tile * 0.13;
+  ctx.fillRect(ax - 1, ay, 3, tile * 0.13);
+  ctx.fillRect(ax - 4, ay + 2, 3, 3);
+  ctx.fillRect(ax + 2, ay + 2, 3, 3);
+  ctx.fillStyle = v % 2 ? "#fff0b8" : "#d9f4ff";
+  ctx.fillRect(ax, ay + 1, 1, 2);
+}
+
+function drawBridgeDeck(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
+  const deckY = y;
+  ctx.fillStyle = "rgba(0,0,0,.36)";
+  ctx.fillRect(x + 1, deckY + tile * 0.36, tile - 2, 4);
+  ctx.fillStyle = "#4a3020";
+  ctx.fillRect(x + 1, deckY + tile * 0.12, tile - 2, tile * 0.47);
+  ctx.fillStyle = v % 2 ? "#bd854e" : "#d39a5b";
+  ctx.fillRect(x + 3, deckY + tile * 0.18, tile - 6, tile * 0.35);
+  ctx.fillStyle = "#f0c17a";
+  ctx.fillRect(x + 4, deckY + tile * 0.2, tile - 8, 2);
+  ctx.fillRect(x + 4, deckY + tile * 0.48, tile - 8, 2);
+  ctx.fillStyle = "#694327";
+  for (let i = 1; i < 4; i++) {
+    const px = x + i * tile / 4;
+    ctx.fillRect(px, deckY + tile * 0.24, 1, tile * 0.23);
+  }
+  ctx.fillStyle = "#f6d89a";
+  ctx.fillRect(x + 2, deckY + tile * 0.08, tile - 4, 2);
+  ctx.fillRect(x + 2, deckY + tile * 0.56, tile - 4, 2);
+  ctx.fillStyle = "#70472a";
+  for (let i = 0; i < 3; i++) {
+    const px = x + 4 + i * (tile - 8) / 2;
+    ctx.fillRect(px, deckY + tile * 0.02, 2, tile * 0.12);
+    ctx.fillRect(px, deckY + tile * 0.52, 2, tile * 0.12);
+  }
 }
 
 function drawBuilding(
@@ -416,6 +580,18 @@ function drawBuilding(
   ctx.fillRect(x + 3, y + 4, tile - 6, roofH - 4);
   ctx.fillStyle = "#1a120c";
   ctx.fillRect(x + 4, y + 3, tile - 8, 2);
+  ctx.fillStyle = "rgba(255,255,255,.28)";
+  ctx.fillRect(x + 4, y + roofH + 1, tile - 8, 2);
+  // Tejas y cumbrera: dan volumen al techo visto desde arriba.
+  ctx.fillStyle = "rgba(48,24,18,.22)";
+  for (let line = 0; line < 3; line++) {
+    const roofY = y + 7 + line * Math.max(3, Math.floor((roofH - 7) / 3));
+    ctx.fillRect(x + 4, roofY, tile - 8, 1);
+  }
+  ctx.fillStyle = "rgba(255,238,207,.38)";
+  ctx.fillRect(x + 5, y + 5, tile - 10, 1);
+  ctx.fillStyle = "#6c4830";
+  ctx.fillRect(x + 2, y + tile - 3, tile - 4, 2);
   if (v % 2 === 0) {
     ctx.fillStyle = "#5c3a22";
     ctx.fillRect(x + tile - 8, y + 1, 3, 6);
@@ -482,19 +658,25 @@ function drawBuilding(
     ctx.fillRect(x + tile - 9, y + 14, 3, 5);
   } else {
     const glass = v % 3 === 0 ? "#ffe27a" : "#7ec8ea";
+    // Dos ventanas contrastadas para que cada fachada se lea como una casa y no como un bloque.
+    ctx.fillStyle = "#30271f";
+    ctx.fillRect(x + 4, y + roofH + 4, 7, 7);
+    ctx.fillRect(x + tile - 11, y + roofH + 4, 7, 7);
+    ctx.fillStyle = glass;
+    ctx.fillRect(x + 5, y + roofH + 5, 5, 5);
+    ctx.fillRect(x + tile - 10, y + roofH + 5, 5, 5);
+    ctx.fillStyle = "#f7f1e4";
+    ctx.fillRect(x + 7, y + roofH + 5, 1, 5);
+    ctx.fillRect(x + 5, y + roofH + 7, 5, 1);
+    ctx.fillRect(x + tile - 8, y + roofH + 5, 1, 5);
+    ctx.fillRect(x + tile - 10, y + roofH + 7, 5, 1);
     if (southWalk) {
-      ctx.fillStyle = "#1a120c";
-      ctx.fillRect(x + 4, y + roofH + 4, 6, 5);
-      ctx.fillRect(x + tile - 10, y + roofH + 4, 6, 5);
-      ctx.fillStyle = glass;
-      ctx.fillRect(x + 5, y + roofH + 5, 4, 3);
-      ctx.fillRect(x + tile - 9, y + roofH + 5, 4, 3);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(x + 5, y + roofH + 5, 2, 1);
       ctx.fillStyle = "#6b3e26";
-      ctx.fillRect(x + (tile >> 1) - 3, y + tile - 11, 6, 10);
+      ctx.fillRect(x + (tile >> 1) - 4, y + tile - 11, 8, 10);
       ctx.fillStyle = "#ffd23f";
-      ctx.fillRect(x + (tile >> 1) + 1, y + tile - 7, 1, 2);
+      ctx.fillRect(x + (tile >> 1) + 1, y + tile - 7, 2, 2);
+      ctx.fillStyle = "#3a2416";
+      ctx.fillRect(x + (tile >> 1) - 5, y + tile - 12, 10, 2);
     }
     if (cell.kind === "comercio" && southWalk) {
       const awning = v % 2 ? "#e25b45" : "#2f6fbf";
@@ -636,6 +818,35 @@ function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, tile: numb
   ctx.fillRect(left + size - 4, top + size - 4, 2, 2);
 }
 
+function drawGrassBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  ctx.fillStyle = "#75b85d";
+  ctx.fillRect(0, 0, w, h);
+  // Textura pixelada de césped: manchas suaves, brotes y pequeñas flores.
+  const spacing = 19;
+  for (let gy = 0; gy < h + spacing; gy += spacing) {
+    for (let gx = 0; gx < w + spacing; gx += spacing) {
+      const hash = ((gx * 17 + gy * 31) % 23 + 23) % 23;
+      ctx.fillStyle = hash % 3 === 0 ? "#6eae55" : hash % 3 === 1 ? "#82c368" : "#70b057";
+      ctx.fillRect(gx + (hash % 5), gy + ((hash * 3) % 6), 7 + (hash % 5), 4 + (hash % 3));
+      if (hash % 7 === 0) {
+        ctx.fillStyle = "#4e9144";
+        ctx.fillRect(gx + 5, gy + 9, 2, 5);
+        ctx.fillRect(gx + 2, gy + 11, 3, 2);
+        ctx.fillRect(gx + 7, gy + 10, 3, 2);
+      } else if (hash % 11 === 0) {
+        ctx.fillStyle = "#f4e9a7";
+        ctx.fillRect(gx + 8, gy + 7, 2, 2);
+        ctx.fillStyle = "#e89a73";
+        ctx.fillRect(gx + 7, gy + 8, 1, 1);
+      }
+    }
+  }
+  // Unas sombras de arbustos en los bordes dan profundidad sin tapar el recorrido.
+  ctx.fillStyle = "rgba(43,105,52,.22)";
+  ctx.fillRect(0, 0, 5, h);
+  ctx.fillRect(w - 5, 0, 5, h);
+}
+
 function paint(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -652,11 +863,7 @@ function paint(
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = "#8ec6ea";
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#f7f1e4";
-  ctx.fillRect(12, 8, 28, 10);
-  ctx.fillRect(w - 70, 18, 36, 12);
+  drawGrassBackground(ctx, w, h);
   const tile = Math.max(18, Math.min(46, Math.floor(w / COLS)));
   const offsetX = Math.round((w - COLS * tile) / 2);
   const focusY = Math.round(h * 0.7);
@@ -681,7 +888,16 @@ function paint(
       const worldRow = si * SECTOR_H + vehicle.row;
       const centerY = wy(worldRow + 0.5);
       if (centerY < -tile || centerY > h + tile) continue;
-      drawTrafficCar(ctx, offsetX + vehicle.x * tile, centerY, tile, vehicle.variant, vehicle.direction, time);
+      drawTrafficCar(ctx, offsetX + vehicle.x * tile, centerY + tile * 0.3, tile, vehicle.variant, vehicle.direction, time, true);
+    }
+  }
+
+  // La baranda y el piso de madera se dibujan por encima de los autos: se entiende que pasan debajo.
+  for (let row = rowTop; row >= rowBot; row--) {
+    for (let col = 1; col < COLS - 1; col++) {
+      const cell = tileAt(world, col, row);
+      if (cell?.kind !== "pasarela") continue;
+      drawBridgeDeck(ctx, offsetX + col * tile, wy(row + 1), tile, cell.v);
     }
   }
 
@@ -806,6 +1022,9 @@ export function ArcadeScreen({
   const runRef = useRef<Run | null>(null);
   const keysRef = useRef<Set<string>>(new Set());
   const intentRef = useRef<Dir | null>(null);
+  const pointerDirRef = useRef<Dir | null>(null);
+  const pointerMovedRef = useRef(false);
+  const swipeStepRef = useRef<{ col: number; row: number; dir: Dir; started: boolean } | null>(null);
   const pausedRef = useRef(paused);
   const floaters = useRef<Floater[]>([]);
   const drops = useRef<Drop[]>([]);
@@ -984,9 +1203,24 @@ export function ArcadeScreen({
       if (!pausedRef.current && !hidden.current && run.alive && !overRef.current) {
         const held = [...keysRef.current].map(dirFromCode).filter((d): d is Dir => !!d);
         if (held.length) intentRef.current = held[held.length - 1]!;
+        else if (pointerDirRef.current) intentRef.current = pointerDirRef.current;
+        else if (!swipeStepRef.current || swipeStepRef.current.started) intentRef.current = null;
         run.intent = intentRef.current;
         const events = stepRun(world, run, dt);
         onEvents(events, now);
+        if (pointerDirRef.current && (run.moving || events.some((event) => event.type === "bump"))) pointerMovedRef.current = true;
+        const oneStep = swipeStepRef.current;
+        const continuousInput = held.length > 0 || pointerDirRef.current !== null;
+        if (oneStep && !continuousInput && run.moving && (run.toCol !== oneStep.col || run.toRow !== oneStep.row)) {
+          oneStep.started = true;
+          intentRef.current = null;
+          run.intent = null;
+        }
+        if (oneStep && (events.some((event) => event.type === "bump") || !run.alive || (!run.moving && (run.col !== oneStep.col || run.row !== oneStep.row)))) {
+          swipeStepRef.current = null;
+          const stillHeld = [...keysRef.current].map(dirFromCode).filter((d): d is Dir => !!d);
+          intentRef.current = stillHeld[stillHeld.length - 1] ?? pointerDirRef.current;
+        }
       }
       const simDt = pausedRef.current || hidden.current ? 0 : dt;
       visualTime += simDt;
@@ -1043,8 +1277,16 @@ export function ArcadeScreen({
     };
     const up = (e: KeyboardEvent) => {
       keysRef.current.delete(e.code);
+      const held = [...keysRef.current].map(dirFromCode).filter((d): d is Dir => !!d);
+      intentRef.current = held[held.length - 1] ?? pointerDirRef.current;
     };
-    const blur = () => keysRef.current.clear();
+    const blur = () => {
+      keysRef.current.clear();
+      pointerDirRef.current = null;
+      pointerMovedRef.current = false;
+      swipeStepRef.current = null;
+      intentRef.current = null;
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
@@ -1073,8 +1315,24 @@ export function ArcadeScreen({
   }, [name]);
 
   function aim(dir: Dir) {
+    if (pointerDirRef.current !== dir) pointerMovedRef.current = false;
+    pointerDirRef.current = dir;
     intentRef.current = dir;
     audio.unlock();
+  }
+
+  function releaseAim(dir: Dir) {
+    if (pointerDirRef.current !== dir) return;
+    pointerDirRef.current = null;
+    const held = [...keysRef.current].map(dirFromCode).filter((d): d is Dir => !!d);
+    const run = runRef.current;
+    if (!held.length && run && !run.moving && !pointerMovedRef.current) {
+      swipeStepRef.current = { col: run.col, row: run.row, dir, started: false };
+      intentRef.current = dir;
+    } else {
+      intentRef.current = held[held.length - 1] ?? null;
+    }
+    pointerMovedRef.current = false;
   }
 
   async function toggleFull() {
@@ -1105,7 +1363,7 @@ export function ArcadeScreen({
     <div className="arcade-root">
       <canvas
         ref={canvasRef}
-        aria-label="Calles de Virreyes. El agua sube desde abajo."
+        aria-label="Calles de Virreyes, con casas, atajos por azoteas, pasarelas, escaleras y césped."
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest(".arcade-ui")) return;
           swipe.current = { x: e.clientX, y: e.clientY };
@@ -1118,8 +1376,13 @@ export function ArcadeScreen({
           const dx = e.clientX - s.x;
           const dy = e.clientY - s.y;
           if (Math.hypot(dx, dy) < 18) return;
-          if (Math.abs(dx) > Math.abs(dy)) aim(dx > 0 ? "e" : "w");
-          else aim(dy > 0 ? "s" : "n");
+          const dir: Dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "e" : "w") : (dy > 0 ? "s" : "n");
+          const run = runRef.current;
+          if (run) {
+            pointerDirRef.current = null;
+            intentRef.current = dir;
+            swipeStepRef.current = { col: run.col, row: run.row, dir, started: false };
+          }
         }}
       />
       <div className="arcade-hud arcade-ui">
@@ -1136,7 +1399,7 @@ export function ArcadeScreen({
         </div>
         {hud.gap < 5 && !over && <p className="arcade-danger">El arroyo está cerca</p>}
         {!hud.moved && !over && (
-          <p className="arcade-hint">Deslizá y esquivá los autos. El agua no espera.</p>
+          <p className="arcade-hint">Buscá las escaleras, cruzá las pasarelas y usá las azoteas. Soltá para frenar.</p>
         )}
       </div>
 
@@ -1149,16 +1412,32 @@ export function ArcadeScreen({
 
       {!over && (
         <div className="dpad arcade-ui" aria-hidden="false">
-          <button type="button" className="dpad-btn up" aria-label="Arriba" onPointerDown={(e) => { e.preventDefault(); aim("n"); }}>
+          <button type="button" className="dpad-btn up" aria-label="Arriba"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); aim("n"); }}
+            onPointerUp={() => releaseAim("n")}
+            onPointerCancel={() => releaseAim("n")}
+            onPointerLeave={() => releaseAim("n")}>
             ▲
           </button>
-          <button type="button" className="dpad-btn left" aria-label="Izquierda" onPointerDown={(e) => { e.preventDefault(); aim("w"); }}>
+          <button type="button" className="dpad-btn left" aria-label="Izquierda"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); aim("w"); }}
+            onPointerUp={() => releaseAim("w")}
+            onPointerCancel={() => releaseAim("w")}
+            onPointerLeave={() => releaseAim("w")}>
             ◀
           </button>
-          <button type="button" className="dpad-btn down" aria-label="Abajo" onPointerDown={(e) => { e.preventDefault(); aim("s"); }}>
+          <button type="button" className="dpad-btn down" aria-label="Abajo"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); aim("s"); }}
+            onPointerUp={() => releaseAim("s")}
+            onPointerCancel={() => releaseAim("s")}
+            onPointerLeave={() => releaseAim("s")}>
             ▼
           </button>
-          <button type="button" className="dpad-btn right" aria-label="Derecha" onPointerDown={(e) => { e.preventDefault(); aim("e"); }}>
+          <button type="button" className="dpad-btn right" aria-label="Derecha"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); aim("e"); }}
+            onPointerUp={() => releaseAim("e")}
+            onPointerCancel={() => releaseAim("e")}
+            onPointerLeave={() => releaseAim("e")}>
             ▶
           </button>
         </div>
@@ -1188,10 +1467,11 @@ export function ArcadeScreen({
           <div className="dialog">
             <p className="kicker">Arcade</p>
             <h2>Las calles de Virreyes</h2>
-            <p>Deslizate en cuatro direcciones. La personita sigue hasta una pared, un auto estacionado, una obra u otro obstáculo.</p>
-            <p>Prestá atención al tránsito que cruza algunas calles y evitá tocar los autos en movimiento.</p>
-            <p>El agua del arroyo sube todo el tiempo. Si te alcanza, se termina.</p>
-            <p>Flechas o WASD, deslizar el dedo, o los botones. El barrio no tiene final.</p>
+            <p>Avanzá por las calles y buscá las escaleras pegadas a los edificios para subir a las pasarelas.</p>
+            <p>Las pasarelas de madera cruzan por arriba de los autos. Seguí el puente hasta la escalera del otro lado.</p>
+            <p>En algunas manzanas hay un atajo por las azoteas: buscá la escalera de subida y seguí el pasillo claro del techo.</p>
+            <p>Podés mantener una tecla o un botón para seguir caminando. Al soltar, el personaje termina el paso y frena.</p>
+            <p>Un deslizamiento del dedo mueve una baldosa. El agua del arroyo sube todo el tiempo: no te quedes quieto demasiado.</p>
             <button className="tap" type="button" onClick={() => { setHelp(false); setPauseMenu(true); }}>
               Volver a la pausa
             </button>

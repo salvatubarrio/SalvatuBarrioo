@@ -46,9 +46,11 @@ export class StormAudio {
       const master = ctx.createGain();
       const music = ctx.createGain();
       const sfx = ctx.createGain();
-      master.gain.value = this.muted ? 0 : 0.85;
-      music.gain.value = 0.34;
-      sfx.gain.value = 0.9;
+      // El volumen general permanece activo: los efectos y la música tienen
+      // controles independientes para que silenciar efectos no corte la música.
+      master.gain.value = 0.85;
+      music.gain.value = this.trackEnabled ? 0.34 : 0;
+      sfx.gain.value = this.muted ? 0 : 0.9;
       music.connect(master);
       sfx.connect(master);
       master.connect(ctx.destination);
@@ -63,8 +65,10 @@ export class StormAudio {
 
   setMuted(muted: boolean) {
     this.muted = muted;
-    if (!this.ctx || !this.master) return;
-    this.master.gain.setTargetAtTime(muted ? 0 : 0.85, this.ctx.currentTime, 0.03);
+    if (!this.ctx || !this.sfx) return;
+    // Este interruptor afecta únicamente a efectos, lluvia y sonidos ambientales.
+    // La música (incluida la pista del Arcade) sigue saliendo por su propio bus.
+    this.sfx.gain.setTargetAtTime(muted ? 0 : 0.9, this.ctx.currentTime, 0.03);
   }
 
   resume() {
@@ -162,6 +166,9 @@ export class StormAudio {
 
   setTrackEnabled(on: boolean) {
     this.trackEnabled = on;
+    if (this.ctx && this.music) {
+      this.music.gain.setTargetAtTime(on ? 0.34 : 0, this.ctx.currentTime, 0.03);
+    }
     if (!this.track) return;
     if (on && this.trackWant) void this.track.play().catch(() => {});
     else this.track.pause();

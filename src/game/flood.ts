@@ -20,7 +20,10 @@ export type Kind =
   | "escombro"
   | "contenedor"
   | "bache"
-  | "poste";
+  | "poste"
+  | "escalera"
+  | "pasarela"
+  | "azotea";
 
 export type Tile = { kind: Kind; v: number };
 
@@ -114,7 +117,7 @@ const SHOP_NAMES = ["KIOSCO", "ALMACEN", "FARMACIA", "PANADERIA", "VERDULERIA"] 
 const BLOCKERS: Kind[] = ["auto", "obra", "escombro", "contenedor", "bache", "poste"];
 
 function walkable(kind: Kind): boolean {
-  return kind === "street" || kind === "plaza";
+  return kind === "street" || kind === "plaza" || kind === "escalera" || kind === "pasarela" || kind === "azotea";
 }
 
 export function mulberry32(seed: number): () => number {
@@ -290,6 +293,7 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
 
   let blocker = 0;
   let gate: number = (vCols as readonly number[]).includes(entryCol) ? entryCol : 5;
+  const gateAtRow = new Map<number, number>();
   for (let g = 0; g < horiz.length - 1; g++) {
     const r0 = horiz[g]! + 1;
     const r1 = horiz[g + 1]! - 1;
@@ -303,6 +307,7 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
       if (shift.length && rng() < 0.85) gate = shift[Math.floor(rng() * shift.length)]!;
     }
     if (!openCols.includes(gate)) gate = openCols[Math.floor(rng() * openCols.length)]!;
+    gateAtRow.set(horiz[g + 1]!, gate);
     for (const c of openCols) {
       if (c === gate) continue;
       const cells: { r: number; c: number }[] = [];
@@ -378,16 +383,47 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     landmarks.push({ id: `${index}-igl`, row: 14, col: 4, name: "IGLESIA", points: 40 });
   }
 
-  // La salida siempre pertenece a la misma componente conectada que la entrada.
-  const reachable = reachableCells(open, entryCol);
-  const reachableExits = vCols.filter((c) => reachable.some((cell) => cell.r === H - 1 && cell.c === c));
-  const exitChoices = reachableExits.filter((c) => c !== entryCol);
-  const exit = rng() < 0.4 && exitChoices.length
-    ? exitChoices[Math.floor(rng() * exitChoices.length)]!
-    : (reachableExits.includes(entryCol) ? entryCol : reachableExits[0] ?? entryCol);
+  // Atajo opcional por azoteas: conecta dos calles a través de los techos.
+  // Es un mini-puzzle legible: subir una escalera, cruzar la azotea y bajar por la otra.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const g = (index + attempt) % 4;
+    const bottomRow = horiz[g]!;
+    const topRow = horiz[g + 1]!;
+    const roofRow = bottomRow + 2;
+    const startCol = g === 0 ? entryCol : (gateAtRow.get(bottomRow) ?? entryCol);
+    let endCol = gateAtRow.get(topRow) ?? startCol;
+    if (endCol === startCol) {
+      endCol = vCols
+        .filter((c) => c !== startCol)
+        .sort((a, b) => Math.abs(a - startCol) - Math.abs(b - startCol))[0] ?? startCol;
+    }
+    const left = Math.min(startCol, endCol);
+    const right = Math.max(startCol, endCol);
+    const pathHasLandmark = landmarks.some((item) => item.row === roofRow && item.col >= left && item.col <= right);
+    const specialKinds: Kind[] = ["colegio", "hospital", "iglesia", "plaza", "tree", "fountain"];
+    const pathHitsSpecial = Array.from({ length: right - left + 1 }, (_, i) => tiles[roofRow]![left + i]!.kind)
+      .some((kind) => specialKinds.includes(kind));
+    const stairRowsSafe = ![roofRow - 1, roofRow + 1].some((r, i) => {
+      const c = i === 0 ? startCol : endCol;
+      return specialKinds.includes(tiles[r]![c]!.kind);
+    });
+    if (startCol === endCol || pathHasLandmark || pathHitsSpecial || !stairRowsSafe) continue;
 
-  // Tránsito horizontal. Cada vehículo ocupa una calle transversal distinta.
-  // La cantidad y velocidad crecen de forma gradual con los sectores recorridos.
+    for (const [r, c] of [[roofRow - 1, startCol], [roofRow + 1, endCol]] as const) {
+      open[r]![c] = true;
+      forced[r]![c] = "escalera";
+      tiles[r]![c] = { kind: "escalera", v: variant(c, r, index) };
+    }
+    for (let c = left; c <= right; c++) {
+      open[roofRow]![c] = true;
+      forced[roofRow]![c] = "azotea";
+      tiles[roofRow]![c] = { kind: "azotea", v: variant(c, roofRow, index) };
+    }
+    break;
+  }
+
+  // Tránsito horizontal. Cada avenida con autos incluye una pasarela elevada
+  // de punta a punta: ningún coche puede tapar la única salida de un sector.
   const availableTrafficRows = [4, 8, 12].filter((r) => !landmarks.some((item) => item.row === r));
   const trafficCount = index < 3 ? 1 : index < 8 ? 2 : 3;
   const trafficRows = availableTrafficRows.slice();
@@ -395,14 +431,41 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     const j = Math.floor(rng() * (i + 1));
     [trafficRows[i], trafficRows[j]] = [trafficRows[j]!, trafficRows[i]!];
   }
-  const traffic: TrafficVehicle[] = trafficRows.slice(0, trafficCount).map((row, i) => ({
+  const activeTrafficRows = trafficRows.slice(0, trafficCount);
+  activeTrafficRows.sort((a, b) => a - b);
+  for (const roadRow of activeTrafficRows) {
+    const entryGate = gateAtRow.get(roadRow) ?? entryCol;
+    const exitGate = gateAtRow.get(roadRow + 4) ?? entryGate;
+    // Escaleras incrustadas entre las fachadas y pasarela por encima del tránsito.
+    for (const [r, c] of [[roadRow - 1, entryGate], [roadRow + 1, exitGate]] as const) {
+      open[r]![c] = true;
+      forced[r]![c] = "escalera";
+      tiles[r]![c] = { kind: "escalera", v: variant(c, r, index) };
+    }
+    for (let c = 1; c <= W - 2; c++) {
+      open[roadRow]![c] = true;
+      forced[roadRow]![c] = "pasarela";
+      tiles[roadRow]![c] = { kind: "pasarela", v: variant(c, roadRow, index) };
+    }
+  }
+
+  const traffic: TrafficVehicle[] = activeTrafficRows.map((row, i) => ({
     id: `${index}-traffic-${i}`,
     row,
-    x: 2 + rng() * 6,
+    x: 1.7 + rng() * 7.6,
     direction: rng() < 0.5 ? -1 : 1,
-    speed: Math.min(3.6, 1.35 + index * 0.095 + rng() * 0.4),
+    // Más ágiles para que el tránsito no parezca congelado; la ruta segura es la pasarela.
+    speed: Math.min(6.2, 3.6 + index * 0.085 + rng() * 0.8),
     variant: Math.floor(rng() * 6),
   }));
+
+  // La salida siempre pertenece a la misma componente conectada que la entrada.
+  const reachable = reachableCells(open, entryCol);
+  const reachableExits = vCols.filter((c) => reachable.some((cell) => cell.r === H - 1 && cell.c === c));
+  const exitChoices = reachableExits.filter((c) => c !== entryCol);
+  const exit = rng() < 0.4 && exitChoices.length
+    ? exitChoices[Math.floor(rng() * exitChoices.length)]!
+    : (reachableExits.includes(entryCol) ? entryCol : reachableExits[0] ?? entryCol);
 
   // Los coleccionables se ubican únicamente en calles alcanzables desde la entrada.
   // No aparecen en los carriles por los que circulan los vehículos.
@@ -568,6 +631,7 @@ function advanceTraffic(world: World, row: number, dt: number): TrafficMotion[] 
 
 /** Colisión continua: evita que el jugador o un vehículo atraviesen al otro entre frames. */
 function hitsTraffic(
+  world: World,
   from: { col: number; row: number },
   to: { col: number; row: number },
   motions: TrafficMotion[],
@@ -584,6 +648,9 @@ function hitsTraffic(
       const playerCol = from.col + (to.col - from.col) * t;
       const playerRow = from.row + (to.row - from.row) * t;
       const vehicleX = motion.fromX + (motion.toX - motion.fromX) * t;
+      // La pasarela está elevada sobre los autos: cruzar por ella nunca provoca choque.
+      const underpassTile = tileAt(world, Math.floor(playerCol), Math.floor(playerRow));
+      if (underpassTile?.kind === "pasarela") continue;
       // Caja de choque pequeña para la persona y rectangular para el auto.
       if (Math.abs(playerCol - vehicleX) <= 0.56 && Math.abs(playerRow - vehicleRow) <= 0.39) return true;
     }
@@ -614,7 +681,8 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
     events.push({ type: "slide", dir: run.intent });
   }
 
-  let remaining = run.intent ? slideSpeed(run.maxRow) * dt : 0;
+  // Si se suelta la dirección, termina el paso actual y frena en la baldosa siguiente.
+  let remaining = (run.intent || run.moving) ? slideSpeed(run.maxRow) * dt : 0;
   let guard = 0;
   while (remaining > 0 && run.alive && guard++ < 48) {
     if (!run.moving) {
@@ -660,7 +728,7 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
   const south = run.moving ? run.fromRow + (run.toRow - run.fromRow) * run.t : run.row;
   if (south > run.maxRow) run.maxRow = south;
   const playerAfter = playerCenter(run);
-  if (hitsTraffic(playerBefore, playerAfter, trafficMotions)) {
+  if (hitsTraffic(world, playerBefore, playerAfter, trafficMotions)) {
     run.alive = false;
     run.deathCause = "traffic";
     events.push({ type: "crash" });

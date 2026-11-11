@@ -1564,7 +1564,7 @@ body.storming::after {
   position: fixed;
   inset: 0;
   z-index: 8;
-  background: #071425;
+  background: #75b85d;
   touch-action: none;
   user-select: none;
 }
