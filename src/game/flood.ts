@@ -1,3 +1,4 @@
+
 /** Arcade infinito: deslizarse por las calles de Virreyes mientras sube el arroyo. */
 
 export const COLS = 11;
@@ -80,6 +81,8 @@ export type Run = {
 
 const SHOP_NAMES = ["KIOSCO", "ALMACEN", "FARMACIA", "PANADERIA", "VERDULERIA"] as const;
 const BLOCKERS: Kind[] = ["auto", "obra", "escombro"];
+
+function walkable(kind: Kind): boolean {
   return kind === "street" || kind === "plaza";
 }
 
