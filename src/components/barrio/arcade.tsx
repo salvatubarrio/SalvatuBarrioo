@@ -160,46 +160,69 @@ function drawStreet(
   e: boolean,
   w: boolean,
 ) {
-  ctx.fillStyle = "#5c564c";
+  // Asfalto con textura sutil
+  ctx.fillStyle = "#4e4a42";
   ctx.fillRect(x, y, tile, tile);
-  ctx.fillStyle = "#4a453c";
+  ctx.fillStyle = "#45413a";
   ctx.fillRect(x, y, tile, 1);
   ctx.fillRect(x, y + tile - 1, tile, 1);
-  const side = "#d7c49a";
+  // Baldosas de vereda
+  const side = "#cbb892";
+  const curb = "#6a5a48";
   if (!n) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y, tile, 4);
-    ctx.fillStyle = "#6a5a48";
-    ctx.fillRect(x, y + 3, tile, 1);
+    ctx.fillRect(x, y, tile, 5);
+    ctx.fillStyle = "#b8a57a";
+    for (let i = 0; i < tile; i += 4) ctx.fillRect(x + i, y + 1, 2, 3);
+    ctx.fillStyle = curb;
+    ctx.fillRect(x, y + 4, tile, 1);
   }
   if (!s) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y + tile - 4, tile, 4);
-    ctx.fillStyle = "#6a5a48";
-    ctx.fillRect(x, y + tile - 4, tile, 1);
+    ctx.fillRect(x, y + tile - 5, tile, 5);
+    ctx.fillStyle = "#b8a57a";
+    for (let i = 0; i < tile; i += 4) ctx.fillRect(x + i, y + tile - 4, 2, 3);
+    ctx.fillStyle = curb;
+    ctx.fillRect(x, y + tile - 5, tile, 1);
   }
   if (!w) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y, 4, tile);
+    ctx.fillRect(x, y, 5, tile);
+    ctx.fillStyle = curb;
+    ctx.fillRect(x + 4, y, 1, tile);
   }
   if (!e) {
     ctx.fillStyle = side;
-    ctx.fillRect(x + tile - 4, y, 4, tile);
+    ctx.fillRect(x + tile - 5, y, 5, tile);
+    ctx.fillStyle = curb;
+    ctx.fillRect(x + tile - 5, y, 1, tile);
   }
-  ctx.fillStyle = "#e6d7a2";
+  // Líneas de circulación
+  ctx.fillStyle = "#d4c48a";
   if (n && s) {
-    ctx.fillRect(x + (tile >> 1) - 1, y + 6, 2, 5);
-    ctx.fillRect(x + (tile >> 1) - 1, y + tile - 11, 2, 5);
+    ctx.fillRect(x + (tile >> 1) - 1, y + 5, 2, 4);
+    ctx.fillRect(x + (tile >> 1) - 1, y + tile - 9, 2, 4);
   }
   if (e && w) {
-    ctx.fillRect(x + 6, y + (tile >> 1) - 1, 5, 2);
-    ctx.fillRect(x + tile - 11, y + (tile >> 1) - 1, 5, 2);
+    ctx.fillRect(x + 5, y + (tile >> 1) - 1, 4, 2);
+    ctx.fillRect(x + tile - 9, y + (tile >> 1) - 1, 4, 2);
   }
-  if ((v + x) % 7 === 0) {
-    ctx.fillStyle = "#3a342c";
+  // Senda peatonal en intersecciones
+  if ((n || s) && (e || w) && (v % 5 === 0)) {
+    ctx.fillStyle = "#e8dfc0";
+    for (let i = 2; i < tile - 2; i += 3) {
+      if (n && s) ctx.fillRect(x + i, y + (tile >> 1) - 3, 2, 6);
+      if (e && w) ctx.fillRect(x + (tile >> 1) - 3, y + i, 6, 2);
+    }
+  }
+  // Tapa de alcantarilla
+  if ((v + x) % 9 === 0) {
+    ctx.fillStyle = "#2e2a24";
     ctx.fillRect(x + (tile >> 1) - 3, y + (tile >> 1) - 3, 6, 6);
-    ctx.fillStyle = "#8d8474";
+    ctx.fillStyle = "#7a7264";
     ctx.fillRect(x + (tile >> 1) - 2, y + (tile >> 1) - 2, 4, 4);
+    ctx.fillStyle = "#3a342c";
+    ctx.fillRect(x + (tile >> 1) - 1, y + (tile >> 1) - 1, 2, 2);
   }
 }
 
@@ -256,19 +279,29 @@ function drawFountain(ctx: CanvasRenderingContext2D, x: number, y: number, tile:
 
 function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
   const body = CARS[v % CARS.length]!;
-  const top = y + (tile >> 1) - 6;
+  const top = y + (tile >> 1) - 7;
+  // Sombra
+  ctx.fillStyle = "rgba(26,18,12,0.35)";
+  ctx.fillRect(x + 4, top + 12, tile - 8, 3);
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 3, top, tile - 6, 12);
+  ctx.fillRect(x + 3, top, tile - 6, 13);
   ctx.fillStyle = body;
-  ctx.fillRect(x + 4, top + 1, tile - 8, 10);
+  ctx.fillRect(x + 4, top + 1, tile - 8, 11);
+  // Techo
+  ctx.fillStyle = "#2a221c";
+  ctx.fillRect(x + 7, top + 2, tile - 14, 5);
   ctx.fillStyle = "#9fd4ee";
   ctx.fillRect(x + 6, top + 2, 5, 4);
   ctx.fillRect(x + tile - 11, top + 2, 5, 4);
+  // Ruedas
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 5, top + 9, 4, 3);
-  ctx.fillRect(x + tile - 9, top + 9, 4, 3);
+  ctx.fillRect(x + 5, top + 10, 4, 3);
+  ctx.fillRect(x + tile - 9, top + 10, 4, 3);
+  // Luces
   ctx.fillStyle = "#ffd23f";
-  ctx.fillRect(x + tile - 7, top + 4, 2, 2);
+  ctx.fillRect(x + tile - 7, top + 5, 2, 2);
+  ctx.fillStyle = "#e25b45";
+  ctx.fillRect(x + 5, top + 5, 2, 2);
 }
 
 function drawObra(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
@@ -310,22 +343,45 @@ function drawBuilding(
   const v = cell.v % ROOFS.length;
   const wall = WALLS[v]!;
   const roof = ROOFS[v]!;
-  const roofH = Math.max(8, Math.round(tile * 0.36));
+  const roofH = Math.max(8, Math.round(tile * 0.34));
+  // Sombra base
   ctx.fillStyle = "#1a120c";
   ctx.fillRect(x + 1, y + roofH, tile - 2, tile - roofH);
+  // Muro
   ctx.fillStyle = wall;
   ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
+  // Ladrillos sutiles
+  if (v % 3 === 1) {
+    ctx.fillStyle = "rgba(26,18,12,0.12)";
+    for (let by = y + roofH + 3; by < y + tile - 3; by += 3) {
+      ctx.fillRect(x + 3, by, tile - 6, 1);
+    }
+  }
+  // Techo
   ctx.fillStyle = roof;
   ctx.fillRect(x + 1, y + roofH - 2, tile - 2, 4);
-  ctx.fillRect(x + 3, y + 4, tile - 6, roofH - 4);
+  ctx.fillRect(x + 3, y + 3, tile - 6, roofH - 3);
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 4, y + 3, tile - 8, 2);
+  ctx.fillRect(x + 4, y + 2, tile - 8, 2);
+  // Antena / chimenea
   if (v % 2 === 0) {
     ctx.fillStyle = "#5c3a22";
     ctx.fillRect(x + tile - 8, y + 1, 3, 6);
     ctx.fillStyle = "#3a2416";
     ctx.fillRect(x + tile - 9, y, 5, 2);
+  } else if (v % 3 === 0) {
+    ctx.fillStyle = "#6a5a48";
+    ctx.fillRect(x + 5, y + 1, 2, 5);
+    ctx.fillStyle = "#8d8474";
+    ctx.fillRect(x + 4, y, 4, 2);
   }
+  // Reja de terraza ocasional
+  if (v % 4 === 2) {
+    ctx.fillStyle = "#3a342c";
+    ctx.fillRect(x + 3, y + roofH - 1, tile - 6, 2);
+    for (let i = 0; i < 5; i++) ctx.fillRect(x + 4 + i * Math.floor((tile - 8) / 5), y + roofH - 4, 1, 3);
+  }
+
   if (cell.kind === "hospital") {
     ctx.fillStyle = "#f7f1e4";
     ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
@@ -339,6 +395,10 @@ function drawBuilding(
     ctx.fillStyle = "#fff";
     ctx.fillRect(cx, cy + 1, 1, 6);
     ctx.fillRect(cx - 3, cy + 3, 7, 1);
+    // Ventanas hospital
+    ctx.fillStyle = "#7ec8ea";
+    ctx.fillRect(x + 4, y + roofH + 16, 4, 4);
+    ctx.fillRect(x + tile - 9, y + roofH + 16, 4, 4);
   } else if (cell.kind === "colegio") {
     ctx.fillStyle = "#f7f1e4";
     ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
@@ -385,31 +445,54 @@ function drawBuilding(
     ctx.fillRect(x + 6, y + 14, 3, 5);
     ctx.fillRect(x + tile - 9, y + 14, 3, 5);
   } else {
-    const glass = v % 3 === 0 ? "#ffe27a" : "#7ec8ea";
+    const glass = v % 3 === 0 ? "#ffe27a" : v % 3 === 1 ? "#9fd4ee" : "#7ec8ea";
+    // Ventanas con persianas
     if (southWalk) {
       ctx.fillStyle = "#1a120c";
-      ctx.fillRect(x + 4, y + roofH + 4, 6, 5);
-      ctx.fillRect(x + tile - 10, y + roofH + 4, 6, 5);
+      ctx.fillRect(x + 4, y + roofH + 4, 6, 6);
+      ctx.fillRect(x + tile - 10, y + roofH + 4, 6, 6);
       ctx.fillStyle = glass;
-      ctx.fillRect(x + 5, y + roofH + 5, 4, 3);
-      ctx.fillRect(x + tile - 9, y + roofH + 5, 4, 3);
+      ctx.fillRect(x + 5, y + roofH + 5, 4, 4);
+      ctx.fillRect(x + tile - 9, y + roofH + 5, 4, 4);
       ctx.fillStyle = "#fff";
       ctx.fillRect(x + 5, y + roofH + 5, 2, 1);
+      // Persianas
+      if (v % 2 === 0) {
+        ctx.fillStyle = "rgba(26,18,12,0.25)";
+        ctx.fillRect(x + 5, y + roofH + 5, 4, 1);
+        ctx.fillRect(x + 5, y + roofH + 7, 4, 1);
+      }
+      // Balcón ocasional
+      if (v % 4 === 3) {
+        ctx.fillStyle = "#8d8474";
+        ctx.fillRect(x + 3, y + roofH + 10, tile - 6, 2);
+        ctx.fillStyle = "#3a342c";
+        for (let i = 0; i < 6; i++) ctx.fillRect(x + 4 + i * 3, y + roofH + 9, 1, 3);
+      }
+      // Puerta
       ctx.fillStyle = "#6b3e26";
       ctx.fillRect(x + (tile >> 1) - 3, y + tile - 11, 6, 10);
+      ctx.fillStyle = "#4a2e1a";
+      ctx.fillRect(x + (tile >> 1) - 2, y + tile - 10, 4, 8);
       ctx.fillStyle = "#ffd23f";
       ctx.fillRect(x + (tile >> 1) + 1, y + tile - 7, 1, 2);
     }
     if (cell.kind === "comercio" && southWalk) {
-      const awning = v % 2 ? "#e25b45" : "#2f6fbf";
+      const awning = v % 3 === 0 ? "#e25b45" : v % 3 === 1 ? "#2f6fbf" : "#2f9a4a";
       ctx.fillStyle = awning;
-      ctx.fillRect(x + 2, y + roofH + 1, tile - 4, 4);
+      ctx.fillRect(x + 2, y + roofH + 1, tile - 4, 5);
       ctx.fillStyle = "#f7f1e4";
-      for (let i = 0; i < 4; i++) ctx.fillRect(x + 3 + i * Math.floor((tile - 6) / 4), y + roofH + 1, 2, 4);
+      for (let i = 0; i < 5; i++) ctx.fillRect(x + 3 + i * Math.floor((tile - 6) / 5), y + roofH + 1, 2, 5);
+      // Cartel
       ctx.fillStyle = "#1a120c";
-      ctx.fillRect(x + 3, y + roofH - 7, tile - 6, 6);
+      ctx.fillRect(x + 3, y + roofH - 8, tile - 6, 7);
       ctx.fillStyle = "#ffd23f";
-      ctx.fillRect(x + 4, y + roofH - 6, tile - 8, 4);
+      ctx.fillRect(x + 4, y + roofH - 7, tile - 8, 5);
+      // Vidriera
+      ctx.fillStyle = "#9fd4ee";
+      ctx.fillRect(x + 4, y + roofH + 8, tile - 8, 6);
+      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.fillRect(x + 5, y + roofH + 9, 3, 2);
     }
     if (eastWalk) {
       ctx.fillStyle = "#1a120c";
@@ -424,6 +507,60 @@ function drawBuilding(
       ctx.fillRect(x + 4, y + roofH + 7, 2, 2);
     }
   }
+}
+
+function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, time: number, collected: boolean) {
+  if (collected) return;
+  const bob = Math.sin(time * 5) * 2;
+  const cx = x + tile / 2;
+  const cy = y + tile / 2 + bob;
+  const r = Math.max(3, Math.floor(tile * 0.18));
+  // Glow
+  ctx.fillStyle = "rgba(255, 210, 63, 0.25)";
+  ctx.fillRect(cx - r - 2, cy - r - 2, (r + 2) * 2, (r + 2) * 2);
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.fillStyle = "#ffe27a";
+  ctx.fillRect(cx - r + 1, cy - r + 1, r, r);
+  ctx.fillStyle = "#fff6e8";
+  ctx.fillRect(cx - 1, cy - r + 1, 2, 2);
+  // Brillo animado
+  if (Math.floor(time * 8) % 3 === 0) {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(cx + r - 2, cy - 1, 2, 2);
+  }
+}
+
+function drawPower(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  tile: number,
+  time: number,
+  power: "speed" | "shield" | "magnet",
+  collected: boolean,
+) {
+  if (collected) return;
+  const bob = Math.sin(time * 4.5 + 1) * 2;
+  const cx = x + tile / 2;
+  const cy = y + tile / 2 + bob;
+  const colors = {
+    speed: { a: "#3d7ec4", b: "#7ec8ea" },
+    shield: { a: "#2f9a4a", b: "#8dce6a" },
+    magnet: { a: "#c44738", b: "#e25b45" },
+  };
+  const c = colors[power];
+  ctx.fillStyle = "rgba(255,255,255,0.2)";
+  ctx.fillRect(cx - 7, cy - 7, 14, 14);
+  ctx.fillStyle = c.a;
+  ctx.fillRect(cx - 5, cy - 5, 10, 10);
+  ctx.fillStyle = c.b;
+  ctx.fillRect(cx - 3, cy - 3, 6, 6);
+  ctx.fillStyle = "#fff6e8";
+  ctx.fillRect(cx - 1, cy - 1, 2, 2);
+  // Letra indicadora
+  const label = power === "speed" ? "V" : power === "shield" ? "E" : "M";
+  drawText(ctx, label, cx, cy - 10, 1, "#fff6e8");
 }
 
 function drawHero(
@@ -540,6 +677,16 @@ function paint(
       const x = offsetX + lm.col * tile + tile / 2;
       drawText(ctx, lm.name, x, y, Math.max(1, Math.floor(tile / 14)), "#fff6e8");
     }
+    // Orbes y power-ups
+    for (const item of sector.collectibles ?? []) {
+      if (run.got.has(item.id)) continue;
+      const row = si * SECTOR_H + item.row;
+      const y = wy(row + 1);
+      if (y < -tile || y > h + tile) continue;
+      const x = offsetX + item.col * tile;
+      if (item.kind === "orb") drawOrb(ctx, x, y, tile, time, false);
+      else if (item.kind === "power" && item.power) drawPower(ctx, x, y, tile, time, item.power, false);
+    }
   }
 
   for (const f of floaters) {
@@ -553,29 +700,57 @@ function paint(
   const hy = wy(p.row);
   drawHero(ctx, hx, hy, tile, facing, run.moving, time);
 
+  // Aura de power-up activo
+  if (run.power) {
+    const aura =
+      run.power.kind === "speed"
+        ? "rgba(61,126,196,0.35)"
+        : run.power.kind === "shield"
+          ? "rgba(47,154,74,0.35)"
+          : "rgba(226,91,69,0.35)";
+    ctx.fillStyle = aura;
+    ctx.fillRect(hx - 4, hy - 4, tile + 8, tile + 8);
+  }
+
+  // Lluvia
   ctx.fillStyle = "rgba(180, 220, 245, 0.45)";
-  for (let i = 0; i < 36; i++) {
+  for (let i = 0; i < 42; i++) {
     const rx = (i * 97 + time * 90) % w;
     const ry = (i * 53 + time * 160) % h;
     ctx.fillRect(rx, ry, 2, 7);
   }
 
+  // Agua — inundación con olas, espuma y profundidad
   const surface = wy(run.water);
-  if (surface < h) {
-    const top = Math.max(0, surface);
-    ctx.fillStyle = "rgba(18, 92, 168, 0.72)";
-    ctx.fillRect(0, top, w, h - top);
-    ctx.fillStyle = "rgba(10, 50, 110, 0.35)";
-    ctx.fillRect(0, top + 18, w, h - top);
-    for (let x = 0; x < w; x += 4) {
-      const wave = Math.round(Math.sin(x * 0.09 + time * 5) * 3 + Math.sin(x * 0.23 - time * 3) * 2);
+  if (surface < h + 40) {
+    const top = Math.max(-20, surface);
+    // Cuerpo profundo
+    ctx.fillStyle = "rgba(12, 58, 120, 0.78)";
+    ctx.fillRect(0, top, w, h - top + 20);
+    ctx.fillStyle = "rgba(8, 36, 80, 0.4)";
+    ctx.fillRect(0, top + 22, w, h - top);
+    // Capas de corriente
+    for (let layer = 0; layer < 3; layer++) {
+      const phase = time * (3.2 + layer * 0.8) + layer * 1.7;
+      ctx.fillStyle = layer === 0 ? "rgba(46, 120, 190, 0.35)" : "rgba(30, 90, 160, 0.2)";
+      for (let x = 0; x < w; x += 6) {
+        const wave = Math.round(Math.sin(x * 0.07 + phase) * (4 + layer) + Math.sin(x * 0.19 - phase * 0.7) * 2);
+        ctx.fillRect(x, surface + wave + layer * 8, 6, 3);
+      }
+    }
+    // Cresta de espuma
+    for (let x = 0; x < w; x += 3) {
+      const wave = Math.round(Math.sin(x * 0.11 + time * 5.5) * 3.5 + Math.sin(x * 0.27 - time * 3.2) * 2);
       ctx.fillStyle = "#e7f7ff";
-      ctx.fillRect(x, surface + wave - 2, 4, 3);
-      ctx.fillStyle = "#7ec8ea";
-      ctx.fillRect(x, surface + wave + 2, 4, 2);
-      if ((x / 4 + Math.floor(time * 2)) % 9 === 0) {
-        ctx.fillStyle = "rgba(217, 244, 255, 0.8)";
-        ctx.fillRect(x, surface + 10 + ((x + Math.floor(time * 20)) % 24), 2, 2);
+      ctx.fillRect(x, surface + wave - 3, 3, 3);
+      ctx.fillStyle = "#9fd4ee";
+      ctx.fillRect(x, surface + wave, 3, 2);
+      // Burbujas
+      if ((x / 3 + Math.floor(time * 3)) % 11 === 0) {
+        ctx.fillStyle = "rgba(217, 244, 255, 0.85)";
+        const by = surface + 8 + ((x + Math.floor(time * 28)) % 30);
+        ctx.fillRect(x, by, 2, 2);
+        ctx.fillRect(x + 1, by + 4, 1, 1);
       }
     }
   }
@@ -641,10 +816,11 @@ export function ArcadeScreen({
   const scoreChain = useRef(Promise.resolve());
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [help, setHelp] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [banner, setBanner] = useState(false);
   const [surplus, setSurplus] = useState(0);
-  const [hud, setHud] = useState({ score: 0, best: 0, time: 0, gap: 9, moved: false });
+  const [hud, setHud] = useState({ score: 0, best: 0, time: 0, gap: 9, moved: false, orbs: 0, power: "" as string });
   const [over, setOver] = useState<OverInfo | null>(null);
   const overRef = useRef(false);
   const onRankRef = useRef(onRank);
@@ -663,7 +839,7 @@ export function ArcadeScreen({
     runRef.current = createRun(best);
   }
 
-  pausedRef.current = paused || help;
+  pausedRef.current = paused || help || menuOpen;
 
   useEffect(() => {
     const world = worldRef.current!;
@@ -759,6 +935,25 @@ export function ArcadeScreen({
             life: 1.3,
           });
           audio.place(true);
+        } else if (ev.type === "orb") {
+          floaters.current.push({
+            id: fid.current++,
+            text: `+${ev.points}`,
+            row: run.row,
+            col: run.col,
+            life: 0.9,
+          });
+          audio.place(false);
+        } else if (ev.type === "power") {
+          const labels = { speed: "VELOCIDAD!", shield: "ESCUDO!", magnet: "IMAN!" };
+          floaters.current.push({
+            id: fid.current++,
+            text: labels[ev.power],
+            row: run.row,
+            col: run.col,
+            life: 1.4,
+          });
+          audio.place(true);
         } else if (ev.type === "record") {
           setBanner(true);
           setSurplus(ev.surplus);
@@ -827,6 +1022,14 @@ export function ArcadeScreen({
           time: run.elapsed,
           gap: center.row - run.water,
           moved: run.maxRow > 0.4 || run.moving,
+          orbs: run.orbCount,
+          power: run.power
+            ? run.power.kind === "speed"
+              ? `Vel ${Math.ceil(run.power.remaining)}s`
+              : run.power.kind === "shield"
+                ? `Escudo ${Math.ceil(run.power.remaining)}s`
+                : `Imán ${Math.ceil(run.power.remaining)}s`
+            : "",
         });
         if (run.celebrated) setSurplus(run.surplus);
       }
@@ -835,6 +1038,11 @@ export function ArcadeScreen({
 
     const down = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === "Escape" || e.code === "KeyP") {
+        e.preventDefault();
+        setMenuOpen((m) => !m);
+        return;
+      }
       const dir = dirFromCode(e.code);
       if (!dir) return;
       e.preventDefault();
@@ -931,38 +1139,28 @@ export function ArcadeScreen({
           <div>
             <b>{hud.score} pts</b>
             <span>Récord {Math.max(hud.best, prevBest.current)}</span>
+            {hud.orbs > 0 && <span style={{ marginLeft: 6 }}>✦ {hud.orbs}</span>}
           </div>
           <div>
             <b>{where}</b>
             <span>{formatTime(hud.time)}</span>
+            {hud.power && <span style={{ color: "#ffd23f", marginLeft: 6 }}>{hud.power}</span>}
           </div>
           <div className="arcade-tools">
             <button
-              className={musicOn ? "icon-btn" : "icon-btn is-off"}
+              className="icon-btn"
               type="button"
-              onClick={onMusic}
-              aria-pressed={musicOn}
-              aria-label={musicOn ? "Silenciar música" : "Activar música"}
+              onClick={() => setMenuOpen(true)}
+              aria-label="Pausa"
+              title="Pausa"
             >
-              <Music size={18} />
-            </button>
-            <button className="icon-btn" type="button" onClick={onMute} aria-label={mute ? "Activar sonido" : "Silenciar"}>
-              {mute ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
-            <button className="icon-btn" type="button" onClick={() => void toggleFull()} aria-label="Pantalla completa">
-              {full ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-            </button>
-            <button className="icon-btn help-btn" type="button" onClick={() => setHelp(true)} aria-label="Cómo se juega">
-              ?
-            </button>
-            <button className="tap alt arcade-exit" type="button" onClick={onLeave}>
-              Salir
+              ❚❚
             </button>
           </div>
         </div>
-        {hud.gap < 5 && !over && <p className="arcade-danger">El arroyo está cerca</p>}
-        {!hud.moved && !over && (
-          <p className="arcade-hint">Deslizá hacia arriba. Seguí hasta chocar con una casa.</p>
+        {hud.gap < 5 && !over && !menuOpen && <p className="arcade-danger">El arroyo está cerca</p>}
+        {!hud.moved && !over && !menuOpen && (
+          <p className="arcade-hint">Deslizá hacia arriba. Seguí hasta chocar con una casa. Recolectá orbes ✦</p>
         )}
       </div>
 
@@ -973,7 +1171,7 @@ export function ArcadeScreen({
         </div>
       )}
 
-      {!over && (
+      {!over && !menuOpen && !help && (
         <div className="dpad arcade-ui" aria-hidden="false">
           <button type="button" className="dpad-btn up" aria-label="Arriba" onPointerDown={(e) => { e.preventDefault(); aim("n"); }}>
             ▲
@@ -997,10 +1195,55 @@ export function ArcadeScreen({
             <h2>Las calles de Virreyes</h2>
             <p>Deslizate en cuatro direcciones. La personita sigue hasta una pared, un auto o una obra.</p>
             <p>El agua del arroyo sube todo el tiempo. Si te alcanza, se termina.</p>
+            <p>Recolectá orbes dorados para sumar puntos. Los power-ups dan velocidad, escudo o imán por unos segundos.</p>
             <p>Flechas o WASD, deslizar el dedo, o los botones. El barrio no tiene final.</p>
             <button className="tap" type="button" onClick={() => setHelp(false)}>
               Seguir
             </button>
+          </div>
+        </div>
+      )}
+
+      {menuOpen && !over && (
+        <div className="modal arcade-ui">
+          <div className="dialog">
+            <p className="kicker">Arcade</p>
+            <h2>Pausa</h2>
+            <div className="actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button className="tap" type="button" onClick={() => setMenuOpen(false)}>
+                Reanudar
+              </button>
+              <button className="tap alt" type="button" onClick={() => { setMenuOpen(false); onReplay(); }}>
+                Reiniciar
+              </button>
+              <button
+                className={musicOn ? "tap alt" : "tap alt"}
+                type="button"
+                onClick={onMusic}
+                aria-pressed={musicOn}
+              >
+                Música: {musicOn ? "ON" : "OFF"}
+              </button>
+              <button className="tap alt" type="button" onClick={onMute}>
+                Efectos: {mute ? "OFF" : "ON"}
+              </button>
+              <button className="tap alt" type="button" onClick={() => void toggleFull()}>
+                {full ? "Salir de pantalla completa" : "Pantalla completa"}
+              </button>
+              <button
+                className="tap alt"
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setHelp(true);
+                }}
+              >
+                Controles e instrucciones
+              </button>
+              <button className="tap alt" type="button" onClick={onLeave}>
+                Volver al menú
+              </button>
+            </div>
           </div>
         </div>
       )}
