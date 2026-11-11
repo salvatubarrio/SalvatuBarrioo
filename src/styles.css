@@ -1738,3 +1738,66 @@ body.storming::after {
   60% { transform: translateX(-50%) scale(1.06); opacity: 1; }
   100% { transform: translateX(-50%) scale(1); opacity: 1; }
 }
+
+/* Arcade: pausa compacta y controles agrupados sin tocar la interfaz del juego principal. */
+.arcade-pause {
+  min-width: 42px;
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--color-sand);
+  background: #071425;
+  color: var(--color-sand);
+  box-shadow: 3px 3px 0 #000;
+  pointer-events: auto;
+}
+
+.arcade-pause-modal {
+  z-index: 30;
+  align-items: center;
+  background: rgb(3 10 20 / 0.84);
+}
+
+.arcade-pause-modal .dialog {
+  margin: 0 auto;
+  border-color: #ffd23f;
+  background: #10243a;
+  color: #fff6e8;
+  box-shadow: 7px 7px 0 #000;
+}
+
+.arcade-pause-modal .dialog h2 {
+  font-family: var(--font-pixel);
+  font-size: clamp(0.9rem, 3vw, 1.15rem);
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.arcade-pause-modal .dialog p { color: #c5d4e3; }
+
+.arcade-pause-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.arcade-pause-actions .tap {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px;
+  font-size: 0.78rem;
+}
+
+.arcade-pause-actions .tap:first-child,
+.arcade-pause-actions .tap:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 420px) {
+  .arcade-pause-actions { grid-template-columns: 1fr; }
+  .arcade-pause-actions .tap { grid-column: 1 !important; }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, Music, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, Music, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { audio } from "@/game/audio";
 import { submitArcadeBest, type RankRow, type RankSnapshot } from "@/game/ranking";
 import { ArcadeRankList } from "@/components/barrio/rank-list";
@@ -9,7 +9,6 @@ import {
   createWorld,
   dirFromCode,
   playerCenter,
-  sectorAt,
   shopName,
   stepRun,
   tileAt,
@@ -34,6 +33,7 @@ type OverInfo = {
   rank: number;
   pending: boolean;
   failed: boolean;
+  cause: "water" | "traffic";
 };
 
 const ROOFS = ["#e25b45", "#c44738", "#3d7ec4", "#e2a317", "#8d4d32", "#2f6f4a"];
@@ -136,10 +136,16 @@ function drawCell(
   else if (kind === "plaza") drawPlaza(ctx, x, y, tile, cell?.v ?? 0);
   else if (kind === "tree") drawTree(ctx, x, y, tile);
   else if (kind === "fountain") drawFountain(ctx, x, y, tile, time);
-  else if (kind === "auto" || kind === "obra" || kind === "escombro") {
+  else if (
+    kind === "auto" || kind === "obra" || kind === "escombro" ||
+    kind === "contenedor" || kind === "bache" || kind === "poste"
+  ) {
     drawStreet(ctx, x, y, tile, 1, !solid(north), !solid(south), !solid(east), !solid(west));
     if (kind === "auto") drawCar(ctx, x, y, tile, cell?.v ?? 0);
     else if (kind === "obra") drawObra(ctx, x, y, tile);
+    else if (kind === "contenedor") drawBin(ctx, x, y, tile, cell?.v ?? 0);
+    else if (kind === "bache") drawPothole(ctx, x, y, tile);
+    else if (kind === "poste") drawPole(ctx, x, y, tile);
     else drawDebris(ctx, x, y, tile);
   } else if (cell) drawBuilding(ctx, x, y, tile, cell, !solid(south), !solid(east), !solid(west));
 
@@ -160,69 +166,57 @@ function drawStreet(
   e: boolean,
   w: boolean,
 ) {
-  // Asfalto con textura sutil
-  ctx.fillStyle = "#4e4a42";
+  ctx.fillStyle = "#5c564c";
   ctx.fillRect(x, y, tile, tile);
-  ctx.fillStyle = "#45413a";
+  ctx.fillStyle = "#4a453c";
   ctx.fillRect(x, y, tile, 1);
   ctx.fillRect(x, y + tile - 1, tile, 1);
-  // Baldosas de vereda
-  const side = "#cbb892";
-  const curb = "#6a5a48";
+  const side = "#d7c49a";
   if (!n) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y, tile, 5);
-    ctx.fillStyle = "#b8a57a";
-    for (let i = 0; i < tile; i += 4) ctx.fillRect(x + i, y + 1, 2, 3);
-    ctx.fillStyle = curb;
-    ctx.fillRect(x, y + 4, tile, 1);
+    ctx.fillRect(x, y, tile, 4);
+    ctx.fillStyle = "#6a5a48";
+    ctx.fillRect(x, y + 3, tile, 1);
   }
   if (!s) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y + tile - 5, tile, 5);
-    ctx.fillStyle = "#b8a57a";
-    for (let i = 0; i < tile; i += 4) ctx.fillRect(x + i, y + tile - 4, 2, 3);
-    ctx.fillStyle = curb;
-    ctx.fillRect(x, y + tile - 5, tile, 1);
+    ctx.fillRect(x, y + tile - 4, tile, 4);
+    ctx.fillStyle = "#6a5a48";
+    ctx.fillRect(x, y + tile - 4, tile, 1);
   }
   if (!w) {
     ctx.fillStyle = side;
-    ctx.fillRect(x, y, 5, tile);
-    ctx.fillStyle = curb;
-    ctx.fillRect(x + 4, y, 1, tile);
+    ctx.fillRect(x, y, 4, tile);
   }
   if (!e) {
     ctx.fillStyle = side;
-    ctx.fillRect(x + tile - 5, y, 5, tile);
-    ctx.fillStyle = curb;
-    ctx.fillRect(x + tile - 5, y, 1, tile);
+    ctx.fillRect(x + tile - 4, y, 4, tile);
   }
-  // Líneas de circulación
-  ctx.fillStyle = "#d4c48a";
+  ctx.fillStyle = "#e6d7a2";
   if (n && s) {
-    ctx.fillRect(x + (tile >> 1) - 1, y + 5, 2, 4);
-    ctx.fillRect(x + (tile >> 1) - 1, y + tile - 9, 2, 4);
+    ctx.fillRect(x + (tile >> 1) - 1, y + 6, 2, 5);
+    ctx.fillRect(x + (tile >> 1) - 1, y + tile - 11, 2, 5);
   }
   if (e && w) {
-    ctx.fillRect(x + 5, y + (tile >> 1) - 1, 4, 2);
-    ctx.fillRect(x + tile - 9, y + (tile >> 1) - 1, 4, 2);
+    ctx.fillRect(x + 6, y + (tile >> 1) - 1, 5, 2);
+    ctx.fillRect(x + tile - 11, y + (tile >> 1) - 1, 5, 2);
   }
-  // Senda peatonal en intersecciones
-  if ((n || s) && (e || w) && (v % 5 === 0)) {
-    ctx.fillStyle = "#e8dfc0";
-    for (let i = 2; i < tile - 2; i += 3) {
-      if (n && s) ctx.fillRect(x + i, y + (tile >> 1) - 3, 2, 6);
-      if (e && w) ctx.fillRect(x + (tile >> 1) - 3, y + i, 6, 2);
-    }
-  }
-  // Tapa de alcantarilla
-  if ((v + x) % 9 === 0) {
-    ctx.fillStyle = "#2e2a24";
-    ctx.fillRect(x + (tile >> 1) - 3, y + (tile >> 1) - 3, 6, 6);
-    ctx.fillStyle = "#7a7264";
-    ctx.fillRect(x + (tile >> 1) - 2, y + (tile >> 1) - 2, 4, 4);
+  // Marcas de asfalto, tapas y pequeñas grietas para evitar superficies planas.
+  if ((v + x) % 7 === 0) {
     ctx.fillStyle = "#3a342c";
-    ctx.fillRect(x + (tile >> 1) - 1, y + (tile >> 1) - 1, 2, 2);
+    ctx.fillRect(x + (tile >> 1) - 3, y + (tile >> 1) - 3, 6, 6);
+    ctx.fillStyle = "#8d8474";
+    ctx.fillRect(x + (tile >> 1) - 2, y + (tile >> 1) - 2, 4, 4);
+  } else {
+    ctx.fillStyle = "#665f53";
+    ctx.fillRect(x + 7 + (v % 3) * 4, y + 10 + (v % 2) * 7, 3, 1);
+    ctx.fillStyle = "#49443c";
+    ctx.fillRect(x + tile - 11, y + 8 + (v % 3) * 5, 2, 2);
+  }
+  if (!n || !s || !e || !w) {
+    ctx.fillStyle = "#e9d8b5";
+    if (!n && v % 2 === 0) ctx.fillRect(x + 5, y + 1, 3, 2);
+    if (!s && v % 2 === 1) ctx.fillRect(x + tile - 8, y + tile - 3, 3, 2);
   }
 }
 
@@ -279,29 +273,98 @@ function drawFountain(ctx: CanvasRenderingContext2D, x: number, y: number, tile:
 
 function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
   const body = CARS[v % CARS.length]!;
-  const top = y + (tile >> 1) - 7;
-  // Sombra
-  ctx.fillStyle = "rgba(26,18,12,0.35)";
-  ctx.fillRect(x + 4, top + 12, tile - 8, 3);
+  const top = y + (tile >> 1) - 6;
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 3, top, tile - 6, 13);
+  ctx.fillRect(x + 3, top, tile - 6, 12);
   ctx.fillStyle = body;
-  ctx.fillRect(x + 4, top + 1, tile - 8, 11);
-  // Techo
-  ctx.fillStyle = "#2a221c";
-  ctx.fillRect(x + 7, top + 2, tile - 14, 5);
+  ctx.fillRect(x + 4, top + 1, tile - 8, 10);
   ctx.fillStyle = "#9fd4ee";
   ctx.fillRect(x + 6, top + 2, 5, 4);
   ctx.fillRect(x + tile - 11, top + 2, 5, 4);
-  // Ruedas
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 5, top + 10, 4, 3);
-  ctx.fillRect(x + tile - 9, top + 10, 4, 3);
-  // Luces
+  ctx.fillRect(x + 5, top + 9, 4, 3);
+  ctx.fillRect(x + tile - 9, top + 9, 4, 3);
   ctx.fillStyle = "#ffd23f";
-  ctx.fillRect(x + tile - 7, top + 5, 2, 2);
-  ctx.fillStyle = "#e25b45";
-  ctx.fillRect(x + 5, top + 5, 2, 2);
+  ctx.fillRect(x + tile - 7, top + 4, 2, 2);
+}
+
+function drawTrafficCar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  tile: number,
+  variant: number,
+  direction: -1 | 1,
+  time: number,
+) {
+  const length = tile * 0.88;
+  const height = tile * 0.46;
+  const left = cx - length / 2;
+  const top = cy - height / 2;
+  const body = CARS[variant % CARS.length]!;
+  ctx.fillStyle = "rgba(15, 12, 10, 0.42)";
+  ctx.fillRect(left + 2, top + height - 1, length - 4, 4);
+  ctx.fillStyle = "#1a120c";
+  ctx.fillRect(left + 1, top + 1, length - 2, height - 1);
+  ctx.fillRect(left - 1, top + 3, 3, height - 5);
+  ctx.fillRect(left + length - 2, top + 3, 3, height - 5);
+  ctx.fillStyle = body;
+  ctx.fillRect(left + 3, top + 1, length - 6, height - 3);
+  ctx.fillStyle = variant % 2 ? "#bce5f5" : "#9fd4ee";
+  ctx.fillRect(cx - length * 0.12, top + 3, length * 0.24, height - 6);
+  ctx.fillStyle = "#66899a";
+  ctx.fillRect(cx - 1, top + 3, 2, height - 6);
+  ctx.fillStyle = "#1a120c";
+  ctx.fillRect(left + length * 0.3, top + height - 3, length * 0.4, 2);
+  ctx.fillStyle = "#ffd23f";
+  const lightX = direction > 0 ? left + length - 4 : left + 2;
+  ctx.fillRect(lightX, top + 3, 2, 2);
+  ctx.fillRect(lightX, top + height - 5, 2, 2);
+  if (Math.floor(time * 5 + variant) % 2 === 0) {
+    ctx.fillStyle = "#ff5a4e";
+    const rearX = direction > 0 ? left + 2 : left + length - 4;
+    ctx.fillRect(rearX, top + 3, 2, 2);
+    ctx.fillRect(rearX, top + height - 5, 2, 2);
+  }
+}
+
+function drawBin(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, v: number) {
+  const left = x + tile * 0.25;
+  const top = y + tile * 0.28;
+  const width = tile * 0.5;
+  const height = tile * 0.48;
+  ctx.fillStyle = "#1a120c";
+  ctx.fillRect(left - 2, top + 2, width + 4, height);
+  ctx.fillStyle = v % 2 ? "#526a61" : "#607b70";
+  ctx.fillRect(left, top + 3, width, height - 2);
+  ctx.fillStyle = "#8fa89a";
+  ctx.fillRect(left - 1, top, width + 2, 4);
+  ctx.fillStyle = "#34483f";
+  for (let i = 1; i <= 3; i++) ctx.fillRect(left + i * (width / 4), top + 6, 1, height - 7);
+  ctx.fillStyle = "#d8d0bd";
+  ctx.fillRect(left + width - 4, top + 7, 2, 4);
+}
+
+function drawPothole(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
+  ctx.fillStyle = "#d7c49a";
+  ctx.fillRect(x + tile * 0.2, y + tile * 0.31, tile * 0.61, tile * 0.39);
+  ctx.fillStyle = "#292722";
+  ctx.fillRect(x + tile * 0.25, y + tile * 0.34, tile * 0.5, tile * 0.31);
+  ctx.fillStyle = "#151412";
+  ctx.fillRect(x + tile * 0.34, y + tile * 0.39, tile * 0.31, tile * 0.2);
+  ctx.fillStyle = "#777065";
+  ctx.fillRect(x + tile * 0.29, y + tile * 0.35, tile * 0.12, 2);
+}
+
+function drawPole(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
+  ctx.fillStyle = "#1a120c";
+  ctx.fillRect(x + tile * 0.42, y + tile * 0.23, tile * 0.2, tile * 0.55);
+  ctx.fillStyle = "#8d8474";
+  ctx.fillRect(x + tile * 0.46, y + tile * 0.18, tile * 0.12, tile * 0.57);
+  ctx.fillStyle = "#d7c49a";
+  ctx.fillRect(x + tile * 0.22, y + tile * 0.3, tile * 0.56, 3);
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillRect(x + tile * 0.47, y + tile * 0.12, tile * 0.1, tile * 0.1);
 }
 
 function drawObra(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number) {
@@ -343,45 +406,22 @@ function drawBuilding(
   const v = cell.v % ROOFS.length;
   const wall = WALLS[v]!;
   const roof = ROOFS[v]!;
-  const roofH = Math.max(8, Math.round(tile * 0.34));
-  // Sombra base
+  const roofH = Math.max(8, Math.round(tile * 0.36));
   ctx.fillStyle = "#1a120c";
   ctx.fillRect(x + 1, y + roofH, tile - 2, tile - roofH);
-  // Muro
   ctx.fillStyle = wall;
   ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
-  // Ladrillos sutiles
-  if (v % 3 === 1) {
-    ctx.fillStyle = "rgba(26,18,12,0.12)";
-    for (let by = y + roofH + 3; by < y + tile - 3; by += 3) {
-      ctx.fillRect(x + 3, by, tile - 6, 1);
-    }
-  }
-  // Techo
   ctx.fillStyle = roof;
   ctx.fillRect(x + 1, y + roofH - 2, tile - 2, 4);
-  ctx.fillRect(x + 3, y + 3, tile - 6, roofH - 3);
+  ctx.fillRect(x + 3, y + 4, tile - 6, roofH - 4);
   ctx.fillStyle = "#1a120c";
-  ctx.fillRect(x + 4, y + 2, tile - 8, 2);
-  // Antena / chimenea
+  ctx.fillRect(x + 4, y + 3, tile - 8, 2);
   if (v % 2 === 0) {
     ctx.fillStyle = "#5c3a22";
     ctx.fillRect(x + tile - 8, y + 1, 3, 6);
     ctx.fillStyle = "#3a2416";
     ctx.fillRect(x + tile - 9, y, 5, 2);
-  } else if (v % 3 === 0) {
-    ctx.fillStyle = "#6a5a48";
-    ctx.fillRect(x + 5, y + 1, 2, 5);
-    ctx.fillStyle = "#8d8474";
-    ctx.fillRect(x + 4, y, 4, 2);
   }
-  // Reja de terraza ocasional
-  if (v % 4 === 2) {
-    ctx.fillStyle = "#3a342c";
-    ctx.fillRect(x + 3, y + roofH - 1, tile - 6, 2);
-    for (let i = 0; i < 5; i++) ctx.fillRect(x + 4 + i * Math.floor((tile - 8) / 5), y + roofH - 4, 1, 3);
-  }
-
   if (cell.kind === "hospital") {
     ctx.fillStyle = "#f7f1e4";
     ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
@@ -395,10 +435,6 @@ function drawBuilding(
     ctx.fillStyle = "#fff";
     ctx.fillRect(cx, cy + 1, 1, 6);
     ctx.fillRect(cx - 3, cy + 3, 7, 1);
-    // Ventanas hospital
-    ctx.fillStyle = "#7ec8ea";
-    ctx.fillRect(x + 4, y + roofH + 16, 4, 4);
-    ctx.fillRect(x + tile - 9, y + roofH + 16, 4, 4);
   } else if (cell.kind === "colegio") {
     ctx.fillStyle = "#f7f1e4";
     ctx.fillRect(x + 2, y + roofH + 1, tile - 4, tile - roofH - 2);
@@ -445,54 +481,31 @@ function drawBuilding(
     ctx.fillRect(x + 6, y + 14, 3, 5);
     ctx.fillRect(x + tile - 9, y + 14, 3, 5);
   } else {
-    const glass = v % 3 === 0 ? "#ffe27a" : v % 3 === 1 ? "#9fd4ee" : "#7ec8ea";
-    // Ventanas con persianas
+    const glass = v % 3 === 0 ? "#ffe27a" : "#7ec8ea";
     if (southWalk) {
       ctx.fillStyle = "#1a120c";
-      ctx.fillRect(x + 4, y + roofH + 4, 6, 6);
-      ctx.fillRect(x + tile - 10, y + roofH + 4, 6, 6);
+      ctx.fillRect(x + 4, y + roofH + 4, 6, 5);
+      ctx.fillRect(x + tile - 10, y + roofH + 4, 6, 5);
       ctx.fillStyle = glass;
-      ctx.fillRect(x + 5, y + roofH + 5, 4, 4);
-      ctx.fillRect(x + tile - 9, y + roofH + 5, 4, 4);
+      ctx.fillRect(x + 5, y + roofH + 5, 4, 3);
+      ctx.fillRect(x + tile - 9, y + roofH + 5, 4, 3);
       ctx.fillStyle = "#fff";
       ctx.fillRect(x + 5, y + roofH + 5, 2, 1);
-      // Persianas
-      if (v % 2 === 0) {
-        ctx.fillStyle = "rgba(26,18,12,0.25)";
-        ctx.fillRect(x + 5, y + roofH + 5, 4, 1);
-        ctx.fillRect(x + 5, y + roofH + 7, 4, 1);
-      }
-      // Balcón ocasional
-      if (v % 4 === 3) {
-        ctx.fillStyle = "#8d8474";
-        ctx.fillRect(x + 3, y + roofH + 10, tile - 6, 2);
-        ctx.fillStyle = "#3a342c";
-        for (let i = 0; i < 6; i++) ctx.fillRect(x + 4 + i * 3, y + roofH + 9, 1, 3);
-      }
-      // Puerta
       ctx.fillStyle = "#6b3e26";
       ctx.fillRect(x + (tile >> 1) - 3, y + tile - 11, 6, 10);
-      ctx.fillStyle = "#4a2e1a";
-      ctx.fillRect(x + (tile >> 1) - 2, y + tile - 10, 4, 8);
       ctx.fillStyle = "#ffd23f";
       ctx.fillRect(x + (tile >> 1) + 1, y + tile - 7, 1, 2);
     }
     if (cell.kind === "comercio" && southWalk) {
-      const awning = v % 3 === 0 ? "#e25b45" : v % 3 === 1 ? "#2f6fbf" : "#2f9a4a";
+      const awning = v % 2 ? "#e25b45" : "#2f6fbf";
       ctx.fillStyle = awning;
-      ctx.fillRect(x + 2, y + roofH + 1, tile - 4, 5);
+      ctx.fillRect(x + 2, y + roofH + 1, tile - 4, 4);
       ctx.fillStyle = "#f7f1e4";
-      for (let i = 0; i < 5; i++) ctx.fillRect(x + 3 + i * Math.floor((tile - 6) / 5), y + roofH + 1, 2, 5);
-      // Cartel
+      for (let i = 0; i < 4; i++) ctx.fillRect(x + 3 + i * Math.floor((tile - 6) / 4), y + roofH + 1, 2, 4);
       ctx.fillStyle = "#1a120c";
-      ctx.fillRect(x + 3, y + roofH - 8, tile - 6, 7);
+      ctx.fillRect(x + 3, y + roofH - 7, tile - 6, 6);
       ctx.fillStyle = "#ffd23f";
-      ctx.fillRect(x + 4, y + roofH - 7, tile - 8, 5);
-      // Vidriera
-      ctx.fillStyle = "#9fd4ee";
-      ctx.fillRect(x + 4, y + roofH + 8, tile - 8, 6);
-      ctx.fillStyle = "rgba(255,255,255,0.4)";
-      ctx.fillRect(x + 5, y + roofH + 9, 3, 2);
+      ctx.fillRect(x + 4, y + roofH - 6, tile - 8, 4);
     }
     if (eastWalk) {
       ctx.fillStyle = "#1a120c";
@@ -506,61 +519,38 @@ function drawBuilding(
       ctx.fillStyle = glass;
       ctx.fillRect(x + 4, y + roofH + 7, 2, 2);
     }
+    // Rasgos distintos de fachadas porteñas: balcones, persianas y equipos de aire.
+    if (v % 3 === 0) {
+      ctx.fillStyle = "#5b4637";
+      ctx.fillRect(x + 3, y + roofH + 10, tile - 6, 2);
+      ctx.fillStyle = "#d7c49a";
+      ctx.fillRect(x + 4, y + roofH + 12, 1, 4);
+      ctx.fillRect(x + tile - 5, y + roofH + 12, 1, 4);
+      ctx.fillRect(x + (tile >> 1), y + roofH + 12, 1, 4);
+    } else if (v % 3 === 1) {
+      ctx.fillStyle = "#b7a58a";
+      ctx.fillRect(x + 4, y + roofH + 10, 6, 2);
+      ctx.fillRect(x + tile - 10, y + roofH + 10, 6, 2);
+      ctx.fillStyle = "#6d7f86";
+      ctx.fillRect(x + 5, y + roofH + 12, 4, 2);
+      ctx.fillRect(x + tile - 9, y + roofH + 12, 4, 2);
+    }
+    if (v === 2 || v === 5) {
+      ctx.fillStyle = "#8d8474";
+      ctx.fillRect(x + tile - 9, y + 5, 6, 4);
+      ctx.fillStyle = "#d7e3e8";
+      ctx.fillRect(x + tile - 8, y + 6, 4, 2);
+      ctx.fillStyle = "#4a5962";
+      ctx.fillRect(x + tile - 7, y + 9, 2, 2);
+    }
+    if (v === 1 || v === 4) {
+      ctx.fillStyle = "#3a2416";
+      ctx.fillRect(x + 5, y + 2, 2, 5);
+      ctx.fillRect(x + 8, y + 1, 2, 6);
+      ctx.fillStyle = "#d8d0bd";
+      ctx.fillRect(x + 4, y + 1, 7, 1);
+    }
   }
-}
-
-function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, time: number, collected: boolean) {
-  if (collected) return;
-  const bob = Math.sin(time * 5) * 2;
-  const cx = x + tile / 2;
-  const cy = y + tile / 2 + bob;
-  const r = Math.max(3, Math.floor(tile * 0.18));
-  // Glow
-  ctx.fillStyle = "rgba(255, 210, 63, 0.25)";
-  ctx.fillRect(cx - r - 2, cy - r - 2, (r + 2) * 2, (r + 2) * 2);
-  ctx.fillStyle = "#ffd23f";
-  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-  ctx.fillStyle = "#ffe27a";
-  ctx.fillRect(cx - r + 1, cy - r + 1, r, r);
-  ctx.fillStyle = "#fff6e8";
-  ctx.fillRect(cx - 1, cy - r + 1, 2, 2);
-  // Brillo animado
-  if (Math.floor(time * 8) % 3 === 0) {
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(cx + r - 2, cy - 1, 2, 2);
-  }
-}
-
-function drawPower(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  tile: number,
-  time: number,
-  power: "speed" | "shield" | "magnet",
-  collected: boolean,
-) {
-  if (collected) return;
-  const bob = Math.sin(time * 4.5 + 1) * 2;
-  const cx = x + tile / 2;
-  const cy = y + tile / 2 + bob;
-  const colors = {
-    speed: { a: "#3d7ec4", b: "#7ec8ea" },
-    shield: { a: "#2f9a4a", b: "#8dce6a" },
-    magnet: { a: "#c44738", b: "#e25b45" },
-  };
-  const c = colors[power];
-  ctx.fillStyle = "rgba(255,255,255,0.2)";
-  ctx.fillRect(cx - 7, cy - 7, 14, 14);
-  ctx.fillStyle = c.a;
-  ctx.fillRect(cx - 5, cy - 5, 10, 10);
-  ctx.fillStyle = c.b;
-  ctx.fillRect(cx - 3, cy - 3, 6, 6);
-  ctx.fillStyle = "#fff6e8";
-  ctx.fillRect(cx - 1, cy - 1, 2, 2);
-  // Letra indicadora
-  const label = power === "speed" ? "V" : power === "shield" ? "E" : "M";
-  drawText(ctx, label, cx, cy - 10, 1, "#fff6e8");
 }
 
 function drawHero(
@@ -628,6 +618,24 @@ function drawHero(
   }
 }
 
+function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, time: number) {
+  const pulse = 1 + Math.sin(time * 6 + x * 0.03) * 0.12;
+  const size = Math.max(6, Math.round(tile * 0.28 * pulse));
+  const left = Math.round(x + (tile - size) / 2);
+  const top = Math.round(y + (tile - size) / 2 + Math.sin(time * 3.5 + y * 0.02) * 2);
+  ctx.fillStyle = "rgba(255, 210, 63, 0.18)";
+  ctx.fillRect(left - 4, top - 4, size + 8, size + 8);
+  ctx.fillStyle = "#8b4d12";
+  ctx.fillRect(left + 1, top, size - 2, size);
+  ctx.fillRect(left, top + 1, size, size - 2);
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillRect(left + 2, top + 1, size - 4, size - 2);
+  ctx.fillStyle = "#fff6b0";
+  ctx.fillRect(left + 2, top + 2, Math.max(2, size >> 2), Math.max(2, size >> 2));
+  ctx.fillStyle = "#f59e0b";
+  ctx.fillRect(left + size - 4, top + size - 4, 2, 2);
+}
+
 function paint(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -669,6 +677,15 @@ function paint(
   }
 
   for (let si = Math.max(0, Math.floor(rowBot / SECTOR_H)); si <= Math.min(world.sectors.length - 1, Math.floor(rowTop / SECTOR_H)); si++) {
+    for (const vehicle of world.sectors[si]!.traffic) {
+      const worldRow = si * SECTOR_H + vehicle.row;
+      const centerY = wy(worldRow + 0.5);
+      if (centerY < -tile || centerY > h + tile) continue;
+      drawTrafficCar(ctx, offsetX + vehicle.x * tile, centerY, tile, vehicle.variant, vehicle.direction, time);
+    }
+  }
+
+  for (let si = Math.max(0, Math.floor(rowBot / SECTOR_H)); si <= Math.min(world.sectors.length - 1, Math.floor(rowTop / SECTOR_H)); si++) {
     const sector = world.sectors[si]!;
     for (const lm of sector.landmarks) {
       const row = si * SECTOR_H + lm.row;
@@ -677,15 +694,15 @@ function paint(
       const x = offsetX + lm.col * tile + tile / 2;
       drawText(ctx, lm.name, x, y, Math.max(1, Math.floor(tile / 14)), "#fff6e8");
     }
-    // Orbes y power-ups
-    for (const item of sector.collectibles ?? []) {
-      if (run.got.has(item.id)) continue;
-      const row = si * SECTOR_H + item.row;
+  }
+
+  for (let si = Math.max(0, Math.floor(rowBot / SECTOR_H)); si <= Math.min(world.sectors.length - 1, Math.floor(rowTop / SECTOR_H)); si++) {
+    for (const orb of world.sectors[si]!.orbs) {
+      if (run.got.has(orb.id)) continue;
+      const row = si * SECTOR_H + orb.row;
       const y = wy(row + 1);
       if (y < -tile || y > h + tile) continue;
-      const x = offsetX + item.col * tile;
-      if (item.kind === "orb") drawOrb(ctx, x, y, tile, time, false);
-      else if (item.kind === "power" && item.power) drawPower(ctx, x, y, tile, time, item.power, false);
+      drawOrb(ctx, offsetX + orb.col * tile, y, tile, time);
     }
   }
 
@@ -700,58 +717,41 @@ function paint(
   const hy = wy(p.row);
   drawHero(ctx, hx, hy, tile, facing, run.moving, time);
 
-  // Aura de power-up activo
-  if (run.power) {
-    const aura =
-      run.power.kind === "speed"
-        ? "rgba(61,126,196,0.35)"
-        : run.power.kind === "shield"
-          ? "rgba(47,154,74,0.35)"
-          : "rgba(226,91,69,0.35)";
-    ctx.fillStyle = aura;
-    ctx.fillRect(hx - 4, hy - 4, tile + 8, tile + 8);
-  }
-
-  // Lluvia
   ctx.fillStyle = "rgba(180, 220, 245, 0.45)";
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < 36; i++) {
     const rx = (i * 97 + time * 90) % w;
     const ry = (i * 53 + time * 160) % h;
     ctx.fillRect(rx, ry, 2, 7);
   }
 
-  // Agua — inundación con olas, espuma y profundidad
   const surface = wy(run.water);
-  if (surface < h + 40) {
-    const top = Math.max(-20, surface);
-    // Cuerpo profundo
-    ctx.fillStyle = "rgba(12, 58, 120, 0.78)";
-    ctx.fillRect(0, top, w, h - top + 20);
-    ctx.fillStyle = "rgba(8, 36, 80, 0.4)";
-    ctx.fillRect(0, top + 22, w, h - top);
-    // Capas de corriente
-    for (let layer = 0; layer < 3; layer++) {
-      const phase = time * (3.2 + layer * 0.8) + layer * 1.7;
-      ctx.fillStyle = layer === 0 ? "rgba(46, 120, 190, 0.35)" : "rgba(30, 90, 160, 0.2)";
-      for (let x = 0; x < w; x += 6) {
-        const wave = Math.round(Math.sin(x * 0.07 + phase) * (4 + layer) + Math.sin(x * 0.19 - phase * 0.7) * 2);
-        ctx.fillRect(x, surface + wave + layer * 8, 6, 3);
+  if (surface < h) {
+    const top = Math.max(0, surface);
+    ctx.fillStyle = "rgba(18, 92, 168, 0.72)";
+    ctx.fillRect(0, top, w, h - top);
+    ctx.fillStyle = "rgba(10, 50, 110, 0.35)";
+    ctx.fillRect(0, top + 18, w, h - top);
+    for (let x = 0; x < w; x += 4) {
+      const wave = Math.round(Math.sin(x * 0.09 + time * 5) * 3 + Math.sin(x * 0.23 - time * 3) * 2);
+      ctx.fillStyle = "#e7f7ff";
+      ctx.fillRect(x, surface + wave - 2, 4, 3);
+      ctx.fillStyle = "#7ec8ea";
+      ctx.fillRect(x, surface + wave + 2, 4, 2);
+      if ((x / 4 + Math.floor(time * 2)) % 9 === 0) {
+        ctx.fillStyle = "rgba(217, 244, 255, 0.8)";
+        ctx.fillRect(x, surface + 10 + ((x + Math.floor(time * 20)) % 24), 2, 2);
+      }
+      if ((x / 4 + Math.floor(time * 3)) % 13 === 0) {
+        const currentY = surface + 22 + ((x * 3 + Math.floor(time * 28)) % Math.max(24, h - surface - 22));
+        ctx.fillStyle = "rgba(126, 200, 234, 0.55)";
+        ctx.fillRect(x, currentY, 10, 2);
       }
     }
-    // Cresta de espuma
-    for (let x = 0; x < w; x += 3) {
-      const wave = Math.round(Math.sin(x * 0.11 + time * 5.5) * 3.5 + Math.sin(x * 0.27 - time * 3.2) * 2);
-      ctx.fillStyle = "#e7f7ff";
-      ctx.fillRect(x, surface + wave - 3, 3, 3);
-      ctx.fillStyle = "#9fd4ee";
-      ctx.fillRect(x, surface + wave, 3, 2);
-      // Burbujas
-      if ((x / 3 + Math.floor(time * 3)) % 11 === 0) {
-        ctx.fillStyle = "rgba(217, 244, 255, 0.85)";
-        const by = surface + 8 + ((x + Math.floor(time * 28)) % 30);
-        ctx.fillRect(x, by, 2, 2);
-        ctx.fillRect(x + 1, by + 4, 1, 1);
-      }
+    ctx.fillStyle = "rgba(217, 244, 255, 0.72)";
+    for (let x = 8; x < w; x += 29) {
+      const crest = surface + Math.sin(x * 0.04 + time * 4) * 3;
+      ctx.fillRect(x, crest + 5, 7, 2);
+      ctx.fillRect(x + 5, crest + 8, 3, 1);
     }
   }
 
@@ -816,11 +816,12 @@ export function ArcadeScreen({
   const scoreChain = useRef(Promise.resolve());
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [help, setHelp] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [pauseMenu, setPauseMenu] = useState(false);
   const [full, setFull] = useState(false);
   const [banner, setBanner] = useState(false);
+  const bannerUntil = useRef(0);
   const [surplus, setSurplus] = useState(0);
-  const [hud, setHud] = useState({ score: 0, best: 0, time: 0, gap: 9, moved: false, orbs: 0, power: "" as string });
+  const [hud, setHud] = useState({ score: 0, best: 0, time: 0, gap: 9, moved: false });
   const [over, setOver] = useState<OverInfo | null>(null);
   const overRef = useRef(false);
   const onRankRef = useRef(onRank);
@@ -839,7 +840,7 @@ export function ArcadeScreen({
     runRef.current = createRun(best);
   }
 
-  pausedRef.current = paused || help || menuOpen;
+  pausedRef.current = paused || help || pauseMenu;
 
   useEffect(() => {
     const world = worldRef.current!;
@@ -850,6 +851,7 @@ export function ArcadeScreen({
     let last = performance.now();
     let hudAcc = 0;
     let rainAcc = 0;
+    let visualTime = 0;
     let aliveFlag = true;
     const hidden = { current: false };
     const onVis = () => {
@@ -858,12 +860,13 @@ export function ArcadeScreen({
     };
     document.addEventListener("visibilitychange", onVis);
 
-    const finish = () => {
+    const finish = (cause: "water" | "traffic") => {
       if (saved.current) return;
       saved.current = true;
       overRef.current = true;
       audio.lose();
-      audio.splash();
+      if (cause === "water") audio.splash();
+      else audio.flip();
       const time = run.elapsed;
       const score = run.score;
       const previousLocal = prevBest.current;
@@ -876,6 +879,7 @@ export function ArcadeScreen({
         rank: 0,
         pending: true,
         failed: false,
+        cause,
       });
       void publish(score)
         .then((res) => {
@@ -939,33 +943,26 @@ export function ArcadeScreen({
           floaters.current.push({
             id: fid.current++,
             text: `+${ev.points}`,
-            row: run.row,
-            col: run.col,
-            life: 0.9,
-          });
-          audio.place(false);
-        } else if (ev.type === "power") {
-          const labels = { speed: "VELOCIDAD!", shield: "ESCUDO!", magnet: "IMAN!" };
-          floaters.current.push({
-            id: fid.current++,
-            text: labels[ev.power],
-            row: run.row,
-            col: run.col,
-            life: 1.4,
+            row: ev.row,
+            col: ev.col,
+            life: 0.95,
           });
           audio.place(true);
+        } else if (ev.type === "crash") {
+          shake.current = 1.5;
+          finish("traffic");
         } else if (ev.type === "record") {
           setBanner(true);
+          bannerUntil.current = visualTime + 2.8;
           setSurplus(ev.surplus);
           audio.record();
-          window.setTimeout(() => setBanner(false), 2800);
           void publish(run.score)
             .then((res) => {
               prevBest.current = res.best;
               onRankRef.current(res);
             })
             .catch(() => {});
-        } else if (ev.type === "dead") finish();
+        } else if (ev.type === "dead") finish("water");
       }
     };
 
@@ -991,8 +988,14 @@ export function ArcadeScreen({
         const events = stepRun(world, run, dt);
         onEvents(events, now);
       }
-      shake.current = Math.max(0, shake.current - dt * 2.4);
-      for (const f of floaters.current) f.life -= dt;
+      const simDt = pausedRef.current || hidden.current ? 0 : dt;
+      visualTime += simDt;
+      if (bannerUntil.current > 0 && visualTime >= bannerUntil.current) {
+        bannerUntil.current = 0;
+        setBanner(false);
+      }
+      shake.current = Math.max(0, shake.current - simDt * 2.4);
+      for (const f of floaters.current) f.life -= simDt;
       floaters.current = floaters.current.filter((f) => f.life > 0);
       const center = playerCenter(run);
       for (const d of drops.current) {
@@ -1000,19 +1003,20 @@ export function ArcadeScreen({
           d.x = rect.width * 0.5;
           d.y = rect.height * 0.7;
         }
-        d.vy += 180 * dt;
-        d.x += d.vx * dt;
-        d.y += d.vy * dt;
-        d.life -= dt;
+        d.vy += 180 * simDt;
+        d.x += d.vx * simDt;
+        d.y += d.vy * simDt;
+        d.life -= simDt;
       }
       drops.current = drops.current.filter((d) => d.life > 0);
-      rainAcc += dt;
+      if (pausedRef.current || hidden.current) audio.setRain(0);
+      rainAcc += simDt;
       if (rainAcc > 0.35) {
         rainAcc = 0;
         const gap = center.row - run.water;
         audio.setRain(gap < 3 ? 0.52 : gap < 6 ? 0.3 : 0.16);
       }
-      paint(ctx, world, run, rect.width, rect.height, now / 1000, shake.current, floaters.current, drops.current);
+      paint(ctx, world, run, rect.width, rect.height, visualTime, shake.current, floaters.current, drops.current);
       hudAcc += dt;
       if (hudAcc > 0.12 && aliveFlag) {
         hudAcc = 0;
@@ -1022,14 +1026,6 @@ export function ArcadeScreen({
           time: run.elapsed,
           gap: center.row - run.water,
           moved: run.maxRow > 0.4 || run.moving,
-          orbs: run.orbCount,
-          power: run.power
-            ? run.power.kind === "speed"
-              ? `Vel ${Math.ceil(run.power.remaining)}s`
-              : run.power.kind === "shield"
-                ? `Escudo ${Math.ceil(run.power.remaining)}s`
-                : `Imán ${Math.ceil(run.power.remaining)}s`
-            : "",
         });
         if (run.celebrated) setSurplus(run.surplus);
       }
@@ -1038,11 +1034,6 @@ export function ArcadeScreen({
 
     const down = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === "Escape" || e.code === "KeyP") {
-        e.preventDefault();
-        setMenuOpen((m) => !m);
-        return;
-      }
       const dir = dirFromCode(e.code);
       if (!dir) return;
       e.preventDefault();
@@ -1110,9 +1101,6 @@ export function ArcadeScreen({
     }
   }
 
-  const place = sectorAt(worldRef.current, Math.floor(runRef.current?.row ?? 0));
-  const where = place?.avenue ? "Av. Virreyes" : "Virreyes";
-
   return (
     <div className="arcade-root">
       <canvas
@@ -1139,28 +1127,16 @@ export function ArcadeScreen({
           <div>
             <b>{hud.score} pts</b>
             <span>Récord {Math.max(hud.best, prevBest.current)}</span>
-            {hud.orbs > 0 && <span style={{ marginLeft: 6 }}>✦ {hud.orbs}</span>}
-          </div>
-          <div>
-            <b>{where}</b>
-            <span>{formatTime(hud.time)}</span>
-            {hud.power && <span style={{ color: "#ffd23f", marginLeft: 6 }}>{hud.power}</span>}
           </div>
           <div className="arcade-tools">
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Pausa"
-              title="Pausa"
-            >
-              ❚❚
+            <button className="icon-btn arcade-pause" type="button" onClick={() => setPauseMenu(true)} aria-label="Pausar partida">
+              <Pause size={19} />
             </button>
           </div>
         </div>
-        {hud.gap < 5 && !over && !menuOpen && <p className="arcade-danger">El arroyo está cerca</p>}
-        {!hud.moved && !over && !menuOpen && (
-          <p className="arcade-hint">Deslizá hacia arriba. Seguí hasta chocar con una casa. Recolectá orbes ✦</p>
+        {hud.gap < 5 && !over && <p className="arcade-danger">El arroyo está cerca</p>}
+        {!hud.moved && !over && (
+          <p className="arcade-hint">Deslizá y esquivá los autos. El agua no espera.</p>
         )}
       </div>
 
@@ -1171,7 +1147,7 @@ export function ArcadeScreen({
         </div>
       )}
 
-      {!over && !menuOpen && !help && (
+      {!over && (
         <div className="dpad arcade-ui" aria-hidden="false">
           <button type="button" className="dpad-btn up" aria-label="Arriba" onPointerDown={(e) => { e.preventDefault(); aim("n"); }}>
             ▲
@@ -1188,62 +1164,37 @@ export function ArcadeScreen({
         </div>
       )}
 
+      {pauseMenu && !over && (
+        <div className="modal arcade-ui arcade-pause-modal" role="dialog" aria-modal="true" aria-labelledby="arcade-pause-title">
+          <div className="dialog">
+            <p className="kicker">Arcade · Virreyes</p>
+            <h2 id="arcade-pause-title">Partida en pausa</h2>
+            <p>El agua y todos los movimientos quedaron detenidos.</p>
+            <div className="arcade-pause-actions">
+              <button className="tap" type="button" onClick={() => setPauseMenu(false)}><Play size={16} /> Reanudar</button>
+              <button className="tap alt" type="button" onClick={onReplay}><RotateCcw size={16} /> Reiniciar partida</button>
+              <button className="tap alt" type="button" onClick={onMusic} aria-pressed={musicOn}><Music size={16} /> Música: {musicOn ? "activada" : "desactivada"}</button>
+              <button className="tap alt" type="button" onClick={onMute} aria-pressed={!mute}>{mute ? <VolumeX size={16} /> : <Volume2 size={16} />} Sonidos: {mute ? "desactivados" : "activados"}</button>
+              <button className="tap alt" type="button" onClick={() => void toggleFull()}>{full ? <Minimize2 size={16} /> : <Maximize2 size={16} />} {full ? "Salir de pantalla completa" : "Pantalla completa"}</button>
+              <button className="tap alt" type="button" onClick={() => { setPauseMenu(false); setHelp(true); }}>Instrucciones y controles</button>
+              <button className="tap alt" type="button" onClick={onLeave}>Volver al menú principal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {help && (
         <div className="modal arcade-ui">
           <div className="dialog">
             <p className="kicker">Arcade</p>
             <h2>Las calles de Virreyes</h2>
-            <p>Deslizate en cuatro direcciones. La personita sigue hasta una pared, un auto o una obra.</p>
+            <p>Deslizate en cuatro direcciones. La personita sigue hasta una pared, un auto estacionado, una obra u otro obstáculo.</p>
+            <p>Prestá atención al tránsito que cruza algunas calles y evitá tocar los autos en movimiento.</p>
             <p>El agua del arroyo sube todo el tiempo. Si te alcanza, se termina.</p>
-            <p>Recolectá orbes dorados para sumar puntos. Los power-ups dan velocidad, escudo o imán por unos segundos.</p>
             <p>Flechas o WASD, deslizar el dedo, o los botones. El barrio no tiene final.</p>
-            <button className="tap" type="button" onClick={() => setHelp(false)}>
-              Seguir
+            <button className="tap" type="button" onClick={() => { setHelp(false); setPauseMenu(true); }}>
+              Volver a la pausa
             </button>
-          </div>
-        </div>
-      )}
-
-      {menuOpen && !over && (
-        <div className="modal arcade-ui">
-          <div className="dialog">
-            <p className="kicker">Arcade</p>
-            <h2>Pausa</h2>
-            <div className="actions" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button className="tap" type="button" onClick={() => setMenuOpen(false)}>
-                Reanudar
-              </button>
-              <button className="tap alt" type="button" onClick={() => { setMenuOpen(false); onReplay(); }}>
-                Reiniciar
-              </button>
-              <button
-                className={musicOn ? "tap alt" : "tap alt"}
-                type="button"
-                onClick={onMusic}
-                aria-pressed={musicOn}
-              >
-                Música: {musicOn ? "ON" : "OFF"}
-              </button>
-              <button className="tap alt" type="button" onClick={onMute}>
-                Efectos: {mute ? "OFF" : "ON"}
-              </button>
-              <button className="tap alt" type="button" onClick={() => void toggleFull()}>
-                {full ? "Salir de pantalla completa" : "Pantalla completa"}
-              </button>
-              <button
-                className="tap alt"
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setHelp(true);
-                }}
-              >
-                Controles e instrucciones
-              </button>
-              <button className="tap alt" type="button" onClick={onLeave}>
-                Volver al menú
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1264,8 +1215,12 @@ export function ArcadeScreen({
             ) : (
               <>
                 <p className="kicker">Arcade</p>
-                <h2>El arroyo te alcanzó</h2>
-                <p>{name}, el agua subió más rápido que el recorrido.</p>
+                <h2>{over.cause === "traffic" ? "Te chocaste con un auto" : "El arroyo te alcanzó"}</h2>
+                <p>
+                  {over.cause === "traffic"
+                    ? `${name}, el tránsito te encontró en medio de la calle.`
+                    : `${name}, el agua subió más rápido que el recorrido.`}
+                </p>
               </>
             )}
             <ul className="arcade-stats">
