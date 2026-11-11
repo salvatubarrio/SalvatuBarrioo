@@ -18,10 +18,27 @@ export type Kind =
   | "auto"
   | "obra"
   | "escombro"
-  | "orb"
-  | "power";
+  | "contenedor"
+  | "bache"
+  | "poste";
 
 export type Tile = { kind: Kind; v: number };
+
+export type TrafficVehicle = {
+  id: string;
+  row: number;
+  x: number;
+  direction: -1 | 1;
+  speed: number;
+  variant: number;
+};
+
+export type Orb = {
+  id: string;
+  row: number;
+  col: number;
+  points: number;
+};
 
 export type Landmark = {
   id: string;
@@ -31,20 +48,12 @@ export type Landmark = {
   points: number;
 };
 
-export type Collectible = {
-  id: string;
-  row: number;
-  col: number;
-  kind: "orb" | "power";
-  points: number;
-  power?: "speed" | "shield" | "magnet";
-};
-
 export type Sector = {
   tiles: Tile[][];
   exitCol: number;
   landmarks: Landmark[];
-  collectibles: Collectible[];
+  orbs: Orb[];
+  traffic: TrafficVehicle[];
   avenue: boolean;
 };
 
@@ -63,15 +72,10 @@ export type FloodEvent =
   | { type: "slide"; dir: Dir }
   | { type: "bump" }
   | { type: "landmark"; name: string; points: number }
-  | { type: "orb"; points: number }
-  | { type: "power"; power: "speed" | "shield" | "magnet"; points: number }
+  | { type: "orb"; points: number; row: number; col: number }
+  | { type: "crash" }
   | { type: "record"; surplus: number }
   | { type: "dead" };
-
-export type ActivePower = {
-  kind: "speed" | "shield" | "magnet";
-  remaining: number;
-};
 
 export type Run = {
   col: number;
@@ -96,15 +100,21 @@ export type Run = {
   celebrated: boolean;
   surplus: number;
   holdingWall: boolean;
-  power: ActivePower | null;
-  orbCount: number;
+  deathCause: "water" | "traffic" | null;
 };
 
-const SHOP_NAMES = ["KIOSCO", "ALMACEN", "FARMACIA", "PANADERIA", "VERDULERIA", "CAFETERIA", "LIBRERIA"] as const;
-const BLOCKERS: Kind[] = ["auto", "obra", "escombro"];
+type TrafficMotion = {
+  vehicle: TrafficVehicle;
+  sectorIndex: number;
+  fromX: number;
+  toX: number;
+};
+
+const SHOP_NAMES = ["KIOSCO", "ALMACEN", "FARMACIA", "PANADERIA", "VERDULERIA"] as const;
+const BLOCKERS: Kind[] = ["auto", "obra", "escombro", "contenedor", "bache", "poste"];
 
 function walkable(kind: Kind): boolean {
-  return kind === "street" || kind === "plaza" || kind === "orb" || kind === "power";
+  return kind === "street" || kind === "plaza";
 }
 
 export function mulberry32(seed: number): () => number {
@@ -154,8 +164,10 @@ export function screenSign(dir: Dir): { x: number; y: number } {
 }
 
 function variant(col: number, row: number, index: number): number {
-  return Math.abs((col * 13 + row * 47 + index * 91) % 8);
+  return Math.abs((col * 13 + row * 47 + index * 91) % 6);
 }
+
+type Seg = { cells: { r: number; c: number }[]; vertical: boolean; col: number };
 
 function shortest(open: boolean[][], startC: number, goalRow: number): number {
   const H = open.length;
@@ -188,49 +200,53 @@ function shortest(open: boolean[][], startC: number, goalRow: number): number {
   return Infinity;
 }
 
-/** Velocidad de deslizamiento del jugador (más rápida con power speed). */
-export function slideSpeed(row: number, power?: ActivePower | null): number {
+/** Todas las celdas transitables conectadas con la entrada del sector. */
+function reachableCells(open: boolean[][], startC: number): { r: number; c: number }[] {
+  const H = open.length;
+  const W = open[0]?.length ?? 0;
+  if (!open[0]?.[startC]) return [];
+  const q = [{ r: 0, c: startC }];
+  const seen = new Uint8Array(H * W);
+  seen[startC] = 1;
+  const cells: { r: number; c: number }[] = [];
+  for (let head = 0; head < q.length; head++) {
+    const cur = q[head]!;
+    cells.push(cur);
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nc = cur.c + dc!;
+      const nr = cur.r + dr!;
+      if (nr < 0 || nc < 0 || nr >= H || nc >= W || !open[nr]![nc]) continue;
+      const key = nr * W + nc;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      q.push({ r: nr, c: nc });
+    }
+  }
+  return cells;
+}
+
+export function slideSpeed(row: number): number {
   const sector = Math.max(0, row) / SECTOR_H;
-  const base = Math.min(16.4, 12.6 + sector * 0.04);
-  if (power?.kind === "speed") return base * 1.38;
-  return base;
+  return Math.min(15.2, 12.4 + sector * 0.035);
 }
 
 export function waterSpeed(row: number, gap = 8): number {
   const sector = Math.max(0, row) / SECTOR_H;
-  // Progresión más marcada en etapas avanzadas
-  const base = Math.min(6.2, 1.05 + sector * 0.072 + Math.max(0, sector - 8) * 0.04);
-  const pressure = gap > 16 ? 1.55 : gap > 9 ? 1.18 : gap < 3.2 ? 0.55 : 1;
+  const base = Math.min(5.4, 1.05 + sector * 0.065);
+  const pressure = gap > 16 ? 1.5 : gap > 9 ? 1.15 : gap < 3.5 ? 0.58 : 1;
   return base * pressure;
 }
 
-/**
- * Generación urbana mejorada:
- * - Manzanas de distinto tamaño
- * - Calles principales + pasajes laterales
- * - Bifurcaciones y rutas alternativas
- * - Validación de transitabilidad
- * - Orbes y power-ups estratégicos
- */
 function makeSector(index: number, seed: number, entryCol: number): Sector {
   const rng = mulberry32((seed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0);
   const H = SECTOR_H;
   const W = COLS;
   const open = Array.from({ length: H }, () => Array<boolean>(W).fill(false));
   const forced = Array.from({ length: H }, () => Array<Kind | null>(W).fill(null));
-
-  // Calles verticales principales (siempre)
-  const vCols = [2, 5, 8];
-  // Horizontales base + variación por sector
-  const horizBase = [0, 4, 8, 12, 16];
-  // Ocasionalmente agregar una calle horizontal intermedia (pasaje)
-  const extraHoriz: number[] = [];
-  if (rng() < 0.45 && index > 0) {
-    const candidates = [2, 6, 10, 14];
-    const pick = candidates[Math.floor(rng() * candidates.length)]!;
-    if (!horizBase.includes(pick)) extraHoriz.push(pick);
-  }
-  const horiz = [...horizBase, ...extraHoriz].sort((a, b) => a - b);
+  const horiz = [0, 4, 8, 12, 16];
+  // Variar el ancho de las manzanas sin perder la retícula urbana ni las conexiones.
+  const laneLayouts = [[2, 5, 8], [1, 5, 9], [1, 4, 8], [2, 6, 9]] as const;
+  const vCols: number[] = [...laneLayouts[Math.floor(rng() * laneLayouts.length)]!];
 
   for (const c of vCols) {
     for (let r = 0; r < H; r++) open[r]![c] = true;
@@ -239,39 +255,8 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     for (let c = 1; c <= W - 2; c++) open[r]![c] = true;
   }
 
-  // Pasajes laterales estrechos (callejones) — dan rutas alternativas
-  if (index > 0 && rng() < 0.55) {
-    const alleyCol = rng() < 0.5 ? 1 : 9;
-    const alleyR0 = horiz[Math.floor(rng() * (horiz.length - 1))]! + 1;
-    const alleyR1 = Math.min(H - 2, alleyR0 + 2 + Math.floor(rng() * 3));
-    for (let r = alleyR0; r <= alleyR1; r++) {
-      open[r]![alleyCol] = true;
-      // conectar al vertical más cercano
-      const nearV = alleyCol === 1 ? 2 : 8;
-      if (rng() < 0.7) open[r]![nearV] = true;
-    }
-    // puerta de acceso al callejón
-    const connectR = alleyR0 + Math.floor((alleyR1 - alleyR0) / 2);
-    for (let c = Math.min(alleyCol, 2); c <= Math.max(alleyCol, 2); c++) {
-      open[connectR]![c] = true;
-    }
-    if (alleyCol === 9) {
-      for (let c = 8; c <= 9; c++) open[connectR]![c] = true;
-    }
-  }
-
-  // Bifurcación corta entre verticales (atajo horizontal)
-  if (index > 1 && rng() < 0.4) {
-    const br = 3 + Math.floor(rng() * 10);
-    if (!horiz.includes(br)) {
-      const c0 = 2 + Math.floor(rng() * 2) * 3; // 2 o 5
-      const c1 = c0 + 3;
-      for (let c = c0; c <= c1; c++) open[br]![c] = true;
-    }
-  }
-
   const avenue = index % 3 === 2;
-  const plaza = index % 5 === 3 && !avenue;
+  const plaza = index % 4 === 3 && !avenue;
 
   if (plaza) {
     for (let r = 5; r <= 7; r++) {
@@ -303,16 +288,11 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     }
   }
 
-  // Densidad de obstáculos según dificultad (sector)
-  const difficulty = Math.min(1, index / 18);
-  const blockChance = 0.55 + difficulty * 0.28;
-
   let blocker = 0;
   let gate: number = (vCols as readonly number[]).includes(entryCol) ? entryCol : 5;
   for (let g = 0; g < horiz.length - 1; g++) {
     const r0 = horiz[g]! + 1;
     const r1 = horiz[g + 1]! - 1;
-    if (r1 < r0) continue;
     const openCols = vCols.filter((c) => {
       for (let r = r0; r <= r1; r++) if (!open[r]![c]) return false;
       return true;
@@ -320,60 +300,37 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     if (!openCols.length) continue;
     if (!(index === 0 && g === 0)) {
       const shift = openCols.filter((c) => c !== gate);
-      if (shift.length && rng() < 0.82) gate = shift[Math.floor(rng() * shift.length)]!;
+      if (shift.length && rng() < 0.85) gate = shift[Math.floor(rng() * shift.length)]!;
     }
     if (!openCols.includes(gate)) gate = openCols[Math.floor(rng() * openCols.length)]!;
-
     for (const c of openCols) {
       if (c === gate) continue;
-      if (rng() > blockChance) continue;
       const cells: { r: number; c: number }[] = [];
       for (let r = r0; r <= r1; r++) {
         if (avenue && (r === 7 || r === 9)) continue;
         if (open[r]![c] && !forced[r]![c]) cells.push({ r, c });
       }
       if (!cells.length) continue;
-      // Bloquear solo una parte del tramo (deja espacio para orbes en bordes)
-      const take = Math.max(1, Math.floor(cells.length * (0.55 + difficulty * 0.25)));
-      const start = Math.floor(rng() * Math.max(1, cells.length - take + 1));
-      const slice = cells.slice(start, start + take);
-      const prev = slice.map((cell) => open[cell.r]![cell.c]);
-      for (const cell of slice) open[cell.r]![cell.c] = false;
+      const prev = cells.map((cell) => open[cell.r]![cell.c]);
+      for (const cell of cells) open[cell.r]![cell.c] = false;
       const dist = shortest(open, Math.min(W - 2, Math.max(1, entryCol)), H - 1);
-      if (!Number.isFinite(dist) || dist > 90) {
-        slice.forEach((cell, i) => {
+      if (!Number.isFinite(dist) || dist > 72) {
+        cells.forEach((cell, i) => {
           open[cell.r]![cell.c] = prev[i]!;
         });
       } else {
         const kind = BLOCKERS[blocker++ % BLOCKERS.length]!;
-        for (const cell of slice) forced[cell.r]![cell.c] = kind;
+        for (const cell of cells) forced[cell.r]![cell.c] = kind;
       }
     }
   }
 
-  // Garantizar path desde entry hasta el final del sector
   if (!Number.isFinite(shortest(open, entryCol, H - 1))) {
     for (let r = 0; r < H; r++) {
       open[r]![entryCol] = true;
       forced[r]![entryCol] = null;
     }
   }
-
-  // Garantizar que exit también sea alcanzable
-  let exit = entryCol;
-  if (rng() < 0.48) {
-    const choices = vCols.filter((c) => c !== entryCol);
-    const candidate = choices[Math.floor(rng() * choices.length)] ?? entryCol;
-    // verificar que se pueda llegar al exit desde entry
-    if (Number.isFinite(shortest(open, entryCol, H - 1))) {
-      // forzar última fila abierta en exit
-      open[H - 1]![candidate] = true;
-      forced[H - 1]![candidate] = null;
-      exit = candidate;
-    }
-  }
-  open[H - 1]![exit] = true;
-  forced[H - 1]![exit] = null;
 
   const tiles: Tile[][] = Array.from({ length: H }, (_, r) =>
     Array.from({ length: W }, (_, c) => {
@@ -396,7 +353,6 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
   if (!plaza && index % 4 === 2) paintBlock(6, 7, 9, 11, "hospital");
   if (!plaza && index % 4 === 0 && index > 0) paintBlock(3, 4, 13, 15, "iglesia");
 
-  // Variedad de fachadas: comercios en avenidas y algunas manzanas
   if (avenue) {
     for (let r = 0; r < H; r++) {
       for (let c = 0; c < W; c++) {
@@ -412,16 +368,6 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
       if (tiles[3]![c]?.kind === "casa") tiles[3]![c] = { kind: "comercio", v: variant(c, 3, index) };
     }
   }
-  // Más comercios en bordes de calles en sectores medios+
-  if (index > 2 && rng() < 0.5) {
-    for (let r = 1; r < H - 1; r++) {
-      for (const c of [1, 3, 4, 6, 7, 9]) {
-        if (tiles[r]![c]?.kind === "casa" && (open[r]![c - 1] || open[r]![c + 1])) {
-          if (rng() < 0.18) tiles[r]![c] = { kind: "comercio", v: variant(c, r, index) };
-        }
-      }
-    }
-  }
 
   const landmarks: Landmark[] = [];
   if (plaza) landmarks.push({ id: `${index}-plaza`, row: 6, col: 5, name: "PLAZA", points: 40 });
@@ -432,65 +378,60 @@ function makeSector(index: number, seed: number, entryCol: number): Sector {
     landmarks.push({ id: `${index}-igl`, row: 14, col: 4, name: "IGLESIA", points: 40 });
   }
 
-  // ——— Orbes y power-ups ———
-  const collectibles: Collectible[] = [];
-  const used = new Set<string>();
-  const markUsed = (r: number, c: number) => used.add(`${r},${c}`);
+  // La salida siempre pertenece a la misma componente conectada que la entrada.
+  const reachable = reachableCells(open, entryCol);
+  const reachableExits = vCols.filter((c) => reachable.some((cell) => cell.r === H - 1 && cell.c === c));
+  const exitChoices = reachableExits.filter((c) => c !== entryCol);
+  const exit = rng() < 0.4 && exitChoices.length
+    ? exitChoices[Math.floor(rng() * exitChoices.length)]!
+    : (reachableExits.includes(entryCol) ? entryCol : reachableExits[0] ?? entryCol);
 
-  // Orbes en rutas transitables, con preferencia por caminos secundarios y bordes
-  const walkCells: { r: number; c: number }[] = [];
-  for (let r = 1; r < H - 1; r++) {
-    for (let c = 1; c < W - 1; c++) {
-      if (open[r]![c] && (!forced[r]![c] || forced[r]![c] === "plaza")) {
-        walkCells.push({ r, c });
-      }
+  // Tránsito horizontal. Cada vehículo ocupa una calle transversal distinta.
+  // La cantidad y velocidad crecen de forma gradual con los sectores recorridos.
+  const availableTrafficRows = [4, 8, 12].filter((r) => !landmarks.some((item) => item.row === r));
+  const trafficCount = index < 3 ? 1 : index < 8 ? 2 : 3;
+  const trafficRows = availableTrafficRows.slice();
+  for (let i = trafficRows.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [trafficRows[i], trafficRows[j]] = [trafficRows[j]!, trafficRows[i]!];
+  }
+  const traffic: TrafficVehicle[] = trafficRows.slice(0, trafficCount).map((row, i) => ({
+    id: `${index}-traffic-${i}`,
+    row,
+    x: 2 + rng() * 6,
+    direction: rng() < 0.5 ? -1 : 1,
+    speed: Math.min(3.6, 1.35 + index * 0.095 + rng() * 0.4),
+    variant: Math.floor(rng() * 6),
+  }));
+
+  // Los coleccionables se ubican únicamente en calles alcanzables desde la entrada.
+  // No aparecen en los carriles por los que circulan los vehículos.
+  const landmarkCells = new Set(landmarks.map((item) => `${item.row}:${item.col}`));
+  const trafficRowSet = new Set(trafficRows.slice(0, trafficCount));
+  const candidates = reachable
+    .filter(({ r, c }) => r >= 2 && r <= H - 2 && !trafficRowSet.has(r) && tiles[r]![c]!.kind === "street" && !landmarkCells.has(`${r}:${c}`))
+    .sort((a, b) => (a.r - b.r) || (a.c - b.c));
+  const shuffled = candidates.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  const orbCount = Math.min(4, Math.max(2, Math.floor(candidates.length / 8)));
+  const selected: { r: number; c: number }[] = [];
+  for (const candidate of shuffled) {
+    if (selected.every((other) => Math.abs(other.r - candidate.r) + Math.abs(other.c - candidate.c) >= 3)) {
+      selected.push(candidate);
+      if (selected.length >= orbCount) break;
     }
   }
+  const orbs: Orb[] = selected.map((cell, i) => ({
+    id: `${index}-orb-${i}`,
+    row: cell.r,
+    col: cell.c,
+    points: i === 0 ? 10 : i === 1 ? 15 : 20,
+  }));
 
-  const orbTarget = Math.min(7, 3 + Math.floor(difficulty * 4) + (plaza ? 2 : 0));
-  let orbsPlaced = 0;
-  // Mezclar con sesgo hacia columnas no-gate (rutas más arriesgadas)
-  const shuffled = walkCells.slice().sort(() => rng() - 0.5);
-  for (const cell of shuffled) {
-    if (orbsPlaced >= orbTarget) break;
-    const key = `${cell.r},${cell.c}`;
-    if (used.has(key)) continue;
-    // Menos probabilidad en la calle principal de entrada
-    const isMain = cell.c === entryCol || cell.c === gate;
-    if (isMain && rng() < 0.55) continue;
-    if (rng() > 0.38) continue;
-    markUsed(cell.r, cell.c);
-    const points = isMain ? 8 : 15 + Math.floor(rng() * 10);
-    collectibles.push({
-      id: `${index}-orb-${orbsPlaced}`,
-      row: cell.r,
-      col: cell.c,
-      kind: "orb",
-      points,
-    });
-    orbsPlaced++;
-  }
-
-  // Power-up ocasional (más frecuente en sectores difíciles)
-  if (index > 1 && rng() < 0.22 + difficulty * 0.18) {
-    const free = walkCells.filter((c) => !used.has(`${c.r},${c.c}`));
-    if (free.length) {
-      const cell = free[Math.floor(rng() * free.length)]!;
-      markUsed(cell.r, cell.c);
-      const powers: Array<"speed" | "shield" | "magnet"> = ["speed", "shield", "magnet"];
-      const power = powers[Math.floor(rng() * powers.length)]!;
-      collectibles.push({
-        id: `${index}-pwr-${cell.r}-${cell.c}`,
-        row: cell.r,
-        col: cell.c,
-        kind: "power",
-        points: 20,
-        power,
-      });
-    }
-  }
-
-  return { tiles, exitCol: exit, landmarks, collectibles, avenue };
+  return { tiles, exitCol: exit, landmarks, orbs, traffic, avenue };
 }
 
 export function createWorld(seed: number): World {
@@ -550,8 +491,7 @@ export function createRun(previousBest: number): Run {
     celebrated: false,
     surplus: 0,
     holdingWall: false,
-    power: null,
-    orbCount: 0,
+    deathCause: null,
   };
 }
 
@@ -569,6 +509,20 @@ function recompute(run: Run) {
 }
 
 function collect(world: World, run: Run, events: FloodEvent[]) {
+  const center = playerCenter(run);
+  const sectorIndex = Math.floor(Math.max(0, center.row) / SECTOR_H);
+  for (let si = Math.max(0, sectorIndex - 1); si <= Math.min(world.sectors.length - 1, sectorIndex + 1); si++) {
+    const sector = world.sectors[si]!;
+    for (const orb of sector.orbs) {
+      if (run.got.has(orb.id)) continue;
+      const worldRow = si * SECTOR_H + orb.row;
+      if (Math.hypot(center.col - (orb.col + 0.5), center.row - (worldRow + 0.5)) <= 0.48) {
+        run.got.add(orb.id);
+        run.bonus += orb.points;
+        events.push({ type: "orb", points: orb.points, row: worldRow, col: orb.col });
+      }
+    }
+  }
   while (run.scan < world.sectors.length) {
     const sector = world.sectors[run.scan]!;
     let pending = false;
@@ -582,31 +536,59 @@ function collect(world: World, run: Run, events: FloodEvent[]) {
         }
       } else pending = true;
     }
-    // Collectibles (orbs / powers) por proximidad del jugador
-    for (const item of sector.collectibles ?? []) {
-      if (run.got.has(item.id)) continue;
-      const wr = run.scan * SECTOR_H + item.row;
-      const pc = playerCenter(run);
-      const dist = Math.hypot(pc.col - (item.col + 0.5), pc.row - (wr + 0.5));
-      const magnetRange = run.power?.kind === "magnet" ? 1.85 : 0.55;
-      if (dist <= magnetRange) {
-        run.got.add(item.id);
-        run.bonus += item.points;
-        if (item.kind === "orb") {
-          run.orbCount += 1;
-          events.push({ type: "orb", points: item.points });
-        } else if (item.kind === "power" && item.power) {
-          run.power = { kind: item.power, remaining: 12 };
-          events.push({ type: "power", power: item.power, points: item.points });
-        }
-      } else if (wr > run.maxRow + 2) {
-        pending = true;
-      }
-    }
     const sectorEnd = run.scan * SECTOR_H + SECTOR_H - 1;
     if (pending || run.maxRow < sectorEnd) break;
     run.scan += 1;
   }
+}
+
+function advanceTraffic(world: World, row: number, dt: number): TrafficMotion[] {
+  const centerSector = Math.floor(Math.max(0, row) / SECTOR_H);
+  const first = Math.max(0, centerSector - 1);
+  const last = Math.min(world.sectors.length - 1, centerSector + 1);
+  const motions: TrafficMotion[] = [];
+  for (let sectorIndex = first; sectorIndex <= last; sectorIndex++) {
+    const sector = world.sectors[sectorIndex]!;
+    for (const vehicle of sector.traffic) {
+      const fromX = vehicle.x;
+      let nextX = fromX + vehicle.direction * vehicle.speed * dt;
+      if (nextX < 1.5) {
+        nextX = 3 - nextX;
+        vehicle.direction = 1;
+      } else if (nextX > 9.5) {
+        nextX = 19 - nextX;
+        vehicle.direction = -1;
+      }
+      vehicle.x = Math.max(1.5, Math.min(9.5, nextX));
+      motions.push({ vehicle, sectorIndex, fromX, toX: vehicle.x });
+    }
+  }
+  return motions;
+}
+
+/** Colisión continua: evita que el jugador o un vehículo atraviesen al otro entre frames. */
+function hitsTraffic(
+  from: { col: number; row: number },
+  to: { col: number; row: number },
+  motions: TrafficMotion[],
+): boolean {
+  for (const motion of motions) {
+    const vehicleRow = motion.sectorIndex * SECTOR_H + motion.vehicle.row + 0.5;
+    const relativeTravel = Math.max(
+      Math.abs(to.col - from.col) + Math.abs(to.row - from.row),
+      Math.abs(motion.toX - motion.fromX),
+    );
+    const samples = Math.max(4, Math.ceil(relativeTravel * 12));
+    for (let sample = 0; sample <= samples; sample++) {
+      const t = sample / samples;
+      const playerCol = from.col + (to.col - from.col) * t;
+      const playerRow = from.row + (to.row - from.row) * t;
+      const vehicleX = motion.fromX + (motion.toX - motion.fromX) * t;
+      // Caja de choque pequeña para la persona y rectangular para el auto.
+      if (Math.abs(playerCol - vehicleX) <= 0.56 && Math.abs(playerRow - vehicleRow) <= 0.39) return true;
+    }
+  }
+  return false;
 }
 
 export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
@@ -615,17 +597,10 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
   const dt = Math.max(0, Math.min(0.05, dtIn));
   run.elapsed += dt;
   ensureWorld(world, Math.floor(run.row) + 24);
-
-  // Power-up timer
-  if (run.power) {
-    run.power.remaining -= dt;
-    if (run.power.remaining <= 0) run.power = null;
-  }
-
+  const trafficMotions = advanceTraffic(world, run.row, dt);
+  const playerBefore = playerCenter(run);
   const gapNow = (run.moving ? run.fromRow + (run.toRow - run.fromRow) * run.t : run.row) - run.water;
-  // Shield reduce un poco la presión del agua
-  const waterMul = run.power?.kind === "shield" ? 0.72 : 1;
-  run.water += waterSpeed(run.maxRow, gapNow) * waterMul * dt;
+  run.water += waterSpeed(run.maxRow, gapNow) * dt;
 
   if (run.moving && run.dir && run.intent && opposite(run.dir, run.intent)) {
     const fc = run.fromCol;
@@ -639,7 +614,7 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
     events.push({ type: "slide", dir: run.intent });
   }
 
-  let remaining = run.intent ? slideSpeed(run.maxRow, run.power) * dt : 0;
+  let remaining = run.intent ? slideSpeed(run.maxRow) * dt : 0;
   let guard = 0;
   while (remaining > 0 && run.alive && guard++ < 48) {
     if (!run.moving) {
@@ -684,7 +659,13 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
 
   const south = run.moving ? run.fromRow + (run.toRow - run.fromRow) * run.t : run.row;
   if (south > run.maxRow) run.maxRow = south;
-  collect(world, run, events);
+  const playerAfter = playerCenter(run);
+  if (hitsTraffic(playerBefore, playerAfter, trafficMotions)) {
+    run.alive = false;
+    run.deathCause = "traffic";
+    events.push({ type: "crash" });
+  }
+  if (run.alive) collect(world, run, events);
   recompute(run);
 
   if (!run.celebrated && run.previousBest > 0 && run.score > run.previousBest) {
@@ -693,10 +674,9 @@ export function stepRun(world: World, run: Run, dtIn: number): FloodEvent[] {
     events.push({ type: "record", surplus: run.surplus });
   }
 
-  // Shield da un pequeño margen extra antes de morir
-  const drownMargin = run.power?.kind === "shield" ? 0.42 : 0.18;
-  if (run.water >= south + drownMargin) {
+  if (run.alive && run.water >= south + 0.18) {
     run.alive = false;
+    run.deathCause = "water";
     events.push({ type: "dead" });
   }
   return events;
