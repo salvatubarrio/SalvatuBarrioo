@@ -303,7 +303,7 @@ export function BarrioApp() {
     setCurtain(
       mode === "learn"
         ? { kicker: "Aprendizaje", title: "Diez rondas" }
-        : { kicker: "Arcade", title: "Virreyes" },
+        : { kicker: "Arcade", title: "Sky Jump" },
     );
     window.setTimeout(() => {
       if (mode === "arcade") {
@@ -385,7 +385,7 @@ export function BarrioApp() {
         <section className="dialog" style={{ margin: "12vh auto 0" }}>
           <p className="kicker">Arcade</p>
           <h1>¿Cómo te llamás?</h1>
-          <p>Deslizate por las calles de Virreyes. Si el arroyo te alcanza, perdiste. Tu récord queda guardado.</p>
+          <p>Tu nombre queda en el ranking.</p>
           <form onSubmit={submitName}>
             <label className="sr" htmlFor="nick">
               Nombre
@@ -720,8 +720,8 @@ function Menu({
           <span className="eyebrow">
             <Zap size={16} /> Arcade
           </span>
-          <h2>La crecida</h2>
-          <p>Deslizate por Virreyes. El arroyo sube y no hay última cuadra.</p>
+          <h2>Sky Jump</h2>
+          <p>Saltá con Hijitus. Solo sumás si subís.</p>
         </button>
       </div>
       <ArcadeRankList rows={board} me={me} mine={mine} error={rankError} />

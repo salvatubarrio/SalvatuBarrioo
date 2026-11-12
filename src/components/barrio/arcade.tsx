@@ -7,11 +7,20 @@ import {
   createSkyWorld,
   extendSkyWorld,
   skyScore,
+  skyZone,
   updateMovingPlatforms,
-  type SkyPlatform,
-  type SkyPickup,
   type SkyWorld,
 } from "@/game/sky-jump";
+import {
+  drawHijitus,
+  drawSkyBackdrop,
+  drawSkyBolt,
+  drawSkyFlood,
+  drawSkyPickup,
+  drawSkyPlatform,
+  drawSkyPortrait,
+  drawSkyRain,
+} from "@/game/sky-art";
 
 type EndCause = "water" | "glass";
 type GameEnd = {
@@ -58,248 +67,48 @@ function createGame(seed = Math.floor(Math.random() * 0xffffffff)): GameState {
   };
 }
 
-function pixel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
-}
-
-function drawSkyline(ctx: CanvasRenderingContext2D, time: number) {
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, "#18243b");
-  sky.addColorStop(0.48, "#566477");
-  sky.addColorStop(1, "#9aa0a0");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
-
-  // Buenos Aires lejana: el desenfoque queda en el horizonte, no en las plataformas.
-  ctx.save();
-  ctx.filter = "blur(3px)";
-  const buildings = [
-    [0, 188, 42, 160], [34, 160, 38, 190], [65, 196, 48, 150], [105, 145, 44, 205],
-    [143, 184, 46, 165], [182, 154, 48, 195], [222, 176, 44, 175], [258, 142, 62, 210],
-  ];
-  for (let i = 0; i < buildings.length; i++) {
-    const [x, y, width, height] = buildings[i]!;
-    pixel(ctx, x, y, width, height, i % 2 ? "#27364a" : "#344358");
-    pixel(ctx, x + 4, y + 8, width - 8, 5, "#586274");
-    for (let wy = y + 22; wy < y + height - 8; wy += 19) {
-      for (let wx = x + 7; wx < x + width - 5; wx += 12) {
-        pixel(ctx, wx, wy, 4, 7, ((wx + wy + i) % 3 === 0) ? "#d4ba83" : "#72808b");
-      }
-    }
-    if (i % 3 === 0) pixel(ctx, x + width / 2 - 1, y - 12, 2, 13, "#28364b");
-  }
-  // Obelisco como silueta, apenas visible entre edificios.
-  pixel(ctx, 244, 104, 8, 80, "#d7d1bd");
-  pixel(ctx, 246, 88, 4, 18, "#d7d1bd");
-  pixel(ctx, 242, 106, 12, 3, "#b4b5ae");
-  // Cúpula de un edificio porteño.
-  pixel(ctx, 77, 177, 26, 16, "#6b7780");
-  pixel(ctx, 82, 168, 16, 10, "#879197");
-  pixel(ctx, 88, 161, 5, 8, "#a7aaa3");
-  ctx.restore();
-
-  // Nubes de tormenta en capas.
-  for (let i = 0; i < 7; i++) {
-    const x = ((i * 61 - time * (5 + i)) % (W + 100)) - 50;
-    const y = 28 + (i % 3) * 34;
-    ctx.fillStyle = i % 2 ? "rgba(21,31,49,.35)" : "rgba(33,42,59,.48)";
-    ctx.fillRect(x, y + 8, 74, 15);
-    ctx.fillRect(x + 10, y, 42, 23);
-    ctx.fillRect(x + 23, y - 5, 26, 28);
-  }
-  const glow = 0.035 + Math.max(0, Math.sin(time * 0.19)) * 0.025;
-  ctx.fillStyle = `rgba(226,235,244,${glow})`;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawPlatform(ctx: CanvasRenderingContext2D, p: SkyPlatform, sy: number, _time: number) {
-  const x = Math.round(p.x);
-  const y = Math.round(sy);
-  const w = Math.round(p.width);
-  if (p.kind === "airplane") {
-    pixel(ctx, x + 5, y + 10, w - 10, 7, "#283c57");
-    pixel(ctx, x + 12, y + 5, w - 25, 10, "#e7e3d6");
-    pixel(ctx, x + w * 0.36, y + 1, w * 0.34, 5, "#b9c7ce");
-    pixel(ctx, x + w * 0.18, y + 11, w * 0.64, 5, "#e7e3d6");
-    pixel(ctx, x + w * 0.46, y - 3, 8, 8, "#e7e3d6");
-    pixel(ctx, x + 12, y + 5, 9, 3, "#69a1c7");
-    pixel(ctx, x + w - 19, y + 5, 9, 3, "#69a1c7");
-    pixel(ctx, x + 8, y + 16, w - 16, 2, "#ffd34e");
-    return;
-  }
-
-  pixel(ctx, x + 3, y + 9, w - 6, 7, "rgba(8,16,26,.45)");
-  if (p.kind === "taxi") {
-    pixel(ctx, x + 1, y + 5, w - 2, 9, "#252d39");
-    pixel(ctx, x + 4, y + 2, w - 8, 8, "#e8bd45");
-    pixel(ctx, x + 10, y + 3, 12, 5, "#9dc0d2");
-    pixel(ctx, x + 29, y + 3, 12, 5, "#9dc0d2");
-    for (let cx = x + 7; cx < x + w - 7; cx += 10) pixel(ctx, cx, y + 10, 5, 2, "#31323a");
-    pixel(ctx, x + 2, y + 11, w - 4, 3, "#f4d45e");
-  } else if (p.kind === "colectivo") {
-    pixel(ctx, x + 1, y + 6, w - 2, 9, "#d9d7c8");
-    pixel(ctx, x + 3, y + 2, w - 6, 7, "#f0e5cd");
-    pixel(ctx, x + 5, y + 3, w - 10, 4, "#7da7b5");
-    pixel(ctx, x + 1, y + 9, w - 2, 3, "#c94c43");
-    pixel(ctx, x + 1, y + 13, w - 2, 3, "#4c5c6b");
-    for (let bx = x + 8; bx < x + w - 5; bx += 15) pixel(ctx, bx, y + 15, 7, 2, "#252d39");
-  } else if (p.kind === "balcony") {
-    pixel(ctx, x, y + 5, w, 10, "#8e5947");
-    pixel(ctx, x + 2, y + 2, w - 4, 5, "#e8c8a1");
-    pixel(ctx, x + 5, y + 5, w - 10, 2, "#f2e5c9");
-    for (let bx = x + 7; bx < x + w - 5; bx += 9) pixel(ctx, bx, y + 7, 2, 7, "#35434c");
-    pixel(ctx, x + 2, y + 13, w - 4, 3, "#6f4b3f");
-  } else if (p.kind === "awning") {
-    pixel(ctx, x + 1, y + 8, w - 2, 7, "#603f3a");
-    pixel(ctx, x + 2, y + 3, w - 4, 7, "#e1e0d2");
-    for (let ax = x + 3; ax < x + w - 3; ax += 12) {
-      pixel(ctx, ax, y + 3, 6, 7, "#ba4c45");
-      pixel(ctx, ax + 6, y + 3, 6, 7, "#f0d8b8");
-    }
-    pixel(ctx, x + 1, y + 10, w - 2, 2, "#f4d8b1");
-  } else {
-    pixel(ctx, x, y + 7, w, 8, "#555d63");
-    pixel(ctx, x + 2, y + 3, w - 4, 7, "#b9b5a7");
-    pixel(ctx, x + 6, y + 4, w - 12, 2, "#d8d4c4");
-    for (let tx = x + 15; tx < x + w - 10; tx += 21) {
-      pixel(ctx, tx, y + 9, 9, 2, "#878b83");
-    }
-    pixel(ctx, x + 1, y + 13, w - 2, 3, "#4a5157");
-  }
-
-  if (p.hazard) {
-    // Vidrios rotos: reflejos celestes y puntas claramente visibles.
-    for (let gx = x + 9; gx < x + w - 8; gx += 15) {
-      ctx.fillStyle = "#bce8f0";
-      ctx.beginPath();
-      ctx.moveTo(gx, y + 2);
-      ctx.lineTo(gx + 4, y - 6);
-      ctx.lineTo(gx + 7, y + 2);
-      ctx.closePath();
-      ctx.fill();
-      pixel(ctx, gx + 3, y - 1, 1, 4, "#f3fbff");
-    }
-    pixel(ctx, x + 4, y + 1, w - 8, 2, "#d4f2f4");
-  }
-}
-
-function drawPickup(ctx: CanvasRenderingContext2D, p: SkyPickup, sx: number, sy: number, t: number) {
-  const bob = Math.sin(t * 4 + p.id) * 3;
-  const x = Math.round(sx);
-  const y = Math.round(sy + bob);
-  if (p.kind === "balloon") {
-    pixel(ctx, x - 2, y + 12, 4, 9, "#e4d7bd");
-    pixel(ctx, x - 8, y - 8, 16, 18, "#e65e68");
-    pixel(ctx, x - 5, y - 12, 10, 5, "#f07c7c");
-    pixel(ctx, x - 4, y - 5, 3, 5, "#ffc0a6");
-    pixel(ctx, x - 2, y + 10, 4, 3, "#b94758");
-  } else {
-    for (let a = 0; a < 8; a++) {
-      const angle = a * Math.PI / 4;
-      const rx = Math.cos(angle) * 14;
-      const ry = Math.sin(angle) * 14;
-      pixel(ctx, x + rx - 2, y + ry - 2, 4, 4, "#ffd34c");
-    }
-    pixel(ctx, x - 10, y - 10, 20, 20, "#f7c943");
-    pixel(ctx, x - 7, y - 7, 14, 14, "#f9e48a");
-    pixel(ctx, x - 4, y - 3, 2, 2, "#63472c");
-    pixel(ctx, x + 3, y - 3, 2, 2, "#63472c");
-    pixel(ctx, x - 4, y + 3, 8, 2, "#b56b3d");
-  }
-}
-
-function drawTurtle(ctx: CanvasRenderingContext2D, x: number, footY: number, t: number, shield: boolean) {
-  const y = Math.round(footY - PLAYER_H);
-  const step = Math.sin(t * 13) > 0 ? 1 : 0;
-  if (shield) {
-    ctx.strokeStyle = "rgba(255,211,76,.82)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y + 15, 22 + Math.sin(t * 7) * 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  // Caparazón y patitas.
-  pixel(ctx, x - 13, y + 10, 14, 14, "#574335");
-  pixel(ctx, x - 11, y + 8, 13, 14, "#7c593d");
-  pixel(ctx, x - 8, y + 11, 8, 8, "#9b7750");
-  pixel(ctx, x - 10, y + 20, 6, 7, "#558e58");
-  pixel(ctx, x + 3, y + 20 + step, 6, 7, "#558e58");
-  // Piloto amarillo, pañuelo rojo y cabeza de tortuga original.
-  pixel(ctx, x - 5, y + 14, 15, 12, "#d8a83c");
-  pixel(ctx, x - 4, y + 17, 13, 7, "#efc65c");
-  pixel(ctx, x + 4, y + 5, 12, 12, "#57975d");
-  pixel(ctx, x + 8, y + 2, 7, 7, "#6bac68");
-  pixel(ctx, x + 10, y + 7, 2, 3, "#f4f0cf");
-  pixel(ctx, x + 11, y + 8, 1, 1, "#182535");
-  pixel(ctx, x + 14, y + 12, 3, 2, "#e6a17e");
-  pixel(ctx, x + 1, y + 13, 11, 3, "#bb4746");
-  pixel(ctx, x + 6, y + 14, 4, 5, "#d85b50");
-  pixel(ctx, x - 2, y + 24, 6, 4, "#4a8050");
-  pixel(ctx, x + 6, y + 24, 6, 4, "#4a8050");
-}
-
-function drawRain(ctx: CanvasRenderingContext2D, time: number, intensity: number) {
-  ctx.save();
-  ctx.strokeStyle = "rgba(210,229,239,.36)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 54; i++) {
-    const x = (i * 67 + Math.floor(time * 190 * (1 + (i % 3) * 0.2))) % W;
-    const y = (i * 43 + Math.floor(time * 255)) % H;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - 3, y + 9 + intensity * 5);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawFlood(ctx: CanvasRenderingContext2D, surfaceY: number, time: number) {
-  const y = Math.max(0, Math.min(H, surfaceY));
-  if (y >= H) return;
-  const water = ctx.createLinearGradient(0, y, 0, H);
-  water.addColorStop(0, "rgba(69,158,185,.92)");
-  water.addColorStop(0.35, "rgba(33,109,151,.97)");
-  water.addColorStop(1, "#143d68");
-  ctx.fillStyle = water;
-  ctx.fillRect(0, y, W, H - y);
-  ctx.fillStyle = "rgba(203,241,243,.75)";
-  for (let x = 0; x < W; x += 24) {
-    const wave = Math.sin(x * 0.075 + time * 4) * 3;
-    pixel(ctx, x, y + wave, 13, 2, "rgba(220,248,247,.75)");
-    pixel(ctx, x + 12, y + wave + 3, 6, 1, "rgba(135,215,224,.55)");
-  }
-  for (let i = 0; i < 13; i++) {
-    const fx = (i * 41 + time * 22) % W;
-    const fy = y + 20 + ((i * 29) % Math.max(25, H - y - 15));
-    pixel(ctx, fx, fy, 4, 2, "rgba(183,228,233,.38)");
-  }
-}
-
 function drawScene(ctx: CanvasRenderingContext2D, game: GameState, time: number) {
-  drawSkyline(ctx, time);
+  const altitude = game.player.highest;
+  drawSkyBackdrop(ctx, altitude, time);
   const camera = game.camera;
-  for (const p of game.world.platforms) {
-    const sy = 440 - (p.height - camera);
-    if (sy < -35 || sy > H + 24) continue;
-    drawPlatform(ctx, p, sy, time);
+  const platforms = game.world.platforms;
+  for (let i = 0; i < platforms.length; i++) {
+    const platform = platforms[i]!;
+    const sy = (440 - (platform.height - camera)) | 0;
+    if (sy < -40 || sy > H + 36) continue;
+    drawSkyPlatform(ctx, platform, sy, time);
   }
-  for (const pickup of game.world.pickups) {
+  const pickups = game.world.pickups;
+  for (let i = 0; i < pickups.length; i++) {
+    const pickup = pickups[i]!;
     if (pickup.collected) continue;
-    const sy = 440 - (pickup.height - camera);
-    if (sy < -35 || sy > H + 30) continue;
-    drawPickup(ctx, pickup, pickup.x, sy, time);
+    const sy = (440 - (pickup.height - camera)) | 0;
+    if (sy < -36 || sy > H + 36) continue;
+    drawSkyPickup(ctx, pickup, sy, time);
   }
-  const playerY = 440 - (game.player.y - camera);
-  drawTurtle(ctx, game.player.x, playerY, time, game.player.shield);
-  const floodY = 440 - (game.flood - camera);
-  drawFlood(ctx, floodY, time);
-  const intensity = Math.min(1.8, 0.65 + game.elapsed / 42);
-  drawRain(ctx, time, intensity);
-  if (Math.sin(time * 0.23) > 0.998) {
-    ctx.fillStyle = "rgba(236,244,255,.28)";
-    ctx.fillRect(0, 0, W, H);
-  }
+  drawSkyRain(ctx, time, altitude);
+  drawSkyBolt(ctx, time, altitude);
+  drawHijitus(
+    ctx,
+    game.player.x,
+    (440 - (game.player.y - camera)) | 0,
+    time,
+    game.player.vx,
+    game.player.vy,
+    game.player.shield,
+  );
+  drawSkyFlood(ctx, 440 - (game.flood - camera), time);
+}
+
+function HijitusPortrait() {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) return;
+    drawSkyPortrait(ctx);
+  }, []);
+  return <canvas ref={ref} className="sky-hero-sprite" width={64} height={64} aria-hidden="true" />;
 }
 
 function formatTime(total: number): string {
@@ -483,9 +292,17 @@ export function ArcadeScreen({
         extendSkyWorld(game.world, p.highest + 160);
 
         if (p.vy < 0) {
-          const crossed = game.world.platforms
-            .filter((platform) => oldY >= platform.height && p.y <= platform.height && p.x + PLAYER_W / 2 > platform.x && p.x - PLAYER_W / 2 < platform.x + platform.width)
-            .sort((a, b) => b.height - a.height)[0];
+          const plats = game.world.platforms;
+          let crossed: (typeof plats)[number] | undefined;
+          for (let i = plats.length - 1; i >= 0; i--) {
+            const platform = plats[i]!;
+            if (platform.height > oldY) continue;
+            if (platform.height < p.y) break;
+            if (p.x + PLAYER_W / 2 > platform.x && p.x - PLAYER_W / 2 < platform.x + platform.width) {
+              crossed = platform;
+              break;
+            }
+          }
           if (crossed) {
             p.y = crossed.height;
             if (crossed.hazard && !p.shield) {
@@ -494,7 +311,6 @@ export function ArcadeScreen({
               if (crossed.hazard && p.shield) {
                 p.shield = false;
                 crossed.hazard = false;
-                p.bonus += 18;
                 audio.record();
               } else {
                 audio.place(false);
@@ -504,17 +320,17 @@ export function ArcadeScreen({
           }
         }
 
-        for (const pickup of game.world.pickups) {
+        const pickups = game.world.pickups;
+        for (let i = 0; i < pickups.length; i++) {
+          const pickup = pickups[i]!;
           if (pickup.collected) continue;
           if (Math.abs(p.x - pickup.x) < 19 && Math.abs(p.y + 8 - pickup.height) < 24) {
             pickup.collected = true;
             if (pickup.kind === "balloon") {
               p.vy = Math.max(p.vy, 790);
-              p.bonus += 25;
               audio.whoosh();
             } else {
               p.shield = true;
-              p.bonus += 12;
               audio.record();
             }
             audio.place(true);
@@ -526,12 +342,20 @@ export function ArcadeScreen({
         if (!overRef.current && game.flood >= p.y - 20) endGameRef.current("water");
         game.score = skyScore(p.highest, p.bonus);
 
-        // Elimina piezas que quedaron muy abajo para mantener liviana la partida.
-        if (game.world.platforms.length > 45) {
-          game.world.platforms = game.world.platforms.filter((platform) => platform.height > game.camera - 170);
+        const floorH = game.camera - 180;
+        const plats = game.world.platforms;
+        if (plats.length > 48 && plats[0]!.height < floorH) {
+          let cut = 0;
+          while (cut < plats.length - 16 && plats[cut]!.height < floorH) cut++;
+          if (cut > 0) plats.splice(0, cut);
         }
-        if (game.world.pickups.length > 30) {
-          game.world.pickups = game.world.pickups.filter((pickup) => !pickup.collected && pickup.height > game.camera - 150);
+        if (pickups.length > 28) {
+          let write = 0;
+          for (let i = 0; i < pickups.length; i++) {
+            const item = pickups[i]!;
+            if (!item.collected && item.height > floorH) pickups[write++] = item;
+          }
+          pickups.length = write;
         }
         hudClock += dt;
         soundClock += dt;
@@ -601,7 +425,7 @@ export function ArcadeScreen({
       <canvas
         ref={canvasRef}
         className="sky-jump-canvas"
-        aria-label="Sky Jump del barrio. Deslizá para mover a la tortuga."
+        aria-label="Sky Jump. Hijitus salta por Buenos Aires."
         onPointerDown={(event: ReactPointerEvent<HTMLCanvasElement>) => {
           if (!started || pauseMenu || help || over) return;
           event.preventDefault();
@@ -619,8 +443,8 @@ export function ArcadeScreen({
         <div className="arcade-top">
           <div>
             <b>{hud.score} PTS</b>
-            <span>Altura {hud.height} m · Récord {Math.max(hud.best, previousBestRef.current)}</span>
-            {hud.shield && <span className="sky-shield-tag">☀ Escudo activo</span>}
+            <span>{skyZone(hud.score).label} · Récord {Math.max(hud.best, previousBestRef.current)}</span>
+            {hud.shield && <span className="sky-shield-tag">Sol de Mayo</span>}
           </div>
           <div className="arcade-tools">
             <button className="icon-btn arcade-pause" type="button" onClick={() => setPauseMenu(true)} aria-label="Pausar partida">
@@ -628,22 +452,20 @@ export function ArcadeScreen({
             </button>
           </div>
         </div>
-        {started && !over && !pauseMenu && !help && <p className="sky-swipe-hint">DESLIZÁ ← → PARA MOVERTE</p>}
+        {started && !over && !pauseMenu && !help && hud.time < 4 && <p className="sky-swipe-hint">← →</p>}
       </div>
 
       {!started && (
         <div className="sky-overlay sky-intro arcade-ui">
           <div className="sky-card">
             <p className="kicker">ARCADE · BUENOS AIRES</p>
-            <h1>SKY JUMP<br />DEL BARRIO</h1>
-            <p className="sky-lead">La ciudad se está inundando. ¡Saltá cada vez más alto!</p>
+            <h1>SKY JUMP</h1>
             <div className="sky-hero">
-              <div className="sky-hero-sprite"><span className="sky-turtle-mini"><i /></span></div>
-              <div><b>Mora, la tortuga viajera</b><small>Tu compañera en esta tormenta porteña.</small></div>
+              <HijitusPortrait />
+              <div><b>Hijitus</b><small>De la vereda al espacio.</small></div>
             </div>
-            <p>Saltá por veredas, balcones, techos de taxis y colectivos, y hasta aviones. Agarrá globos para elevarte y el Sol de Mayo para protegerte de los vidrios.</p>
-            <p className="sky-controls-copy">En celular: deslizá el dedo a izquierda y derecha. En computadora: usá ← → o A / D.</p>
-            <button className="tap sky-start" type="button" onClick={startGame}><Play size={17} /> EMPEZAR A SALTAR</button>
+            <p className="sky-lead">Saltá. Solo sumás si subís.</p>
+            <button className="tap sky-start" type="button" onClick={startGame}><Play size={17} /> EMPEZAR</button>
           </div>
         </div>
       )}
@@ -672,9 +494,9 @@ export function ArcadeScreen({
           <div className="dialog sky-help-dialog">
             <p className="kicker">SKY JUMP</p>
             <h2>Cómo se juega</h2>
-            <p>Mora rebota sola. Vos solamente la guiás de izquierda a derecha; también puede salir por un lado y aparecer por el otro.</p>
-            <p>Las veredas, balcones, techos de taxis y colectivos, y aviones sirven de plataformas. Algunas tienen vidrios rotos: el Sol de Mayo te protege de una caída peligrosa.</p>
-            <p>Los globos dan un impulso extra. La inundación sube cada vez más rápido: no te quedes abajo.</p>
+            <p>Hijitus rebota solo. Movelo con ← → o A / D, o deslizá el dedo. Puede salir por un costado y entrar por el otro.</p>
+            <p>Vereda, techo, taxi, colectivo, balcón y avión se pisan. Los vidrios celestes cortan el salto, salvo con el Sol de Mayo. El globo impulsa.</p>
+            <p>La inundación sube. El cielo cambia con los puntos: calle, techos, cielo y espacio.</p>
             <button className="tap" type="button" onClick={() => { setHelp(false); setPauseMenu(true); }}>Volver a la pausa</button>
           </div>
         </div>
@@ -686,7 +508,7 @@ export function ArcadeScreen({
             {over.isRecord ? <><p className="kicker">ARCADE · SKY JUMP</p><h2 className="record-title">¡NUEVO RÉCORD!</h2><p>¡Bien ahí, {name}! Llegaste más alto que nunca.</p></> : <><p className="kicker">ARCADE · SKY JUMP</p><h2>{over.cause === "glass" ? "¡Cuidado con los vidrios!" : "La inundación te alcanzó"}</h2><p>{over.cause === "glass" ? "El Sol de Mayo no llegó a protegerte esta vez." : "La tormenta porteña ganó esta ronda. ¡Probá subir más rápido!"}</p></>}
             <ul className="arcade-stats">
               <li><span>Puntuación</span><b>{over.score}</b></li>
-              <li><span>Altura máxima</span><b>{over.height} m</b></li>
+              <li><span>Zona</span><b>{skyZone(over.score).label}</b></li>
               <li><span>Récord personal</span><b>{over.best}</b></li>
               <li><span>Tiempo</span><b>{formatTime(over.time)}</b></li>
             </ul>
