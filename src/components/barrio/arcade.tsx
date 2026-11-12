@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2, Music, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { audio } from "@/game/audio";
 import { submitArcadeBest, type RankRow, type RankSnapshot } from "@/game/ranking";
@@ -22,7 +22,7 @@ import {
   drawSkyRain,
 } from "@/game/sky-art";
 
-type EndCause = "water" | "glass";
+type EndCause = "water" | "fire";
 type GameEnd = {
   score: number;
   height: number;
@@ -306,7 +306,7 @@ export function ArcadeScreen({
           if (crossed) {
             p.y = crossed.height;
             if (crossed.hazard && !p.shield) {
-              endGameRef.current("glass");
+              endGameRef.current("fire");
             } else {
               if (crossed.hazard && p.shield) {
                 p.shield = false;
@@ -405,11 +405,17 @@ export function ArcadeScreen({
       if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") keyLeftRef.current = false;
       if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") keyRightRef.current = false;
     };
+    const clearKeys = () => {
+      keyLeftRef.current = false;
+      keyRightRef.current = false;
+    };
     window.addEventListener("keydown", down, { passive: false });
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", clearKeys);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", clearKeys);
     };
   }, [started]);
 
@@ -421,22 +427,29 @@ export function ArcadeScreen({
   }
 
   return (
-    <div className="arcade-root sky-jump-root">
+    <div
+      className="arcade-root sky-jump-root"
+      onPointerDown={(event) => {
+        const target = event.target;
+        if (!started || pauseMenu || help || over || (target instanceof Element && target.closest("button, [role=dialog]"))) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        aimAt(event.clientX);
+        audio.unlock();
+      }}
+      onPointerMove={(event) => {
+        const target = event.target;
+        if (!started || pauseMenu || help || over || (target instanceof Element && target.closest("button, [role=dialog]"))) return;
+        // En PC alcanza con mover el mouse; en celular se sigue el dedo sin botones virtuales.
+        if (event.pointerType === "mouse" || event.pointerType === "touch" || event.pointerType === "pen") {
+          aimAt(event.clientX);
+        }
+      }}
+    >
       <canvas
         ref={canvasRef}
         className="sky-jump-canvas"
         aria-label="Sky Jump. Hijitus salta por Buenos Aires."
-        onPointerDown={(event: ReactPointerEvent<HTMLCanvasElement>) => {
-          if (!started || pauseMenu || help || over) return;
-          event.preventDefault();
-          event.currentTarget.setPointerCapture(event.pointerId);
-          aimAt(event.clientX);
-          audio.unlock();
-        }}
-        onPointerMove={(event: ReactPointerEvent<HTMLCanvasElement>) => {
-          if (event.pointerType === "mouse" && event.buttons === 0 && started) return;
-          if (event.buttons !== 0 || event.pointerType === "touch" || event.pointerType === "pen") aimAt(event.clientX);
-        }}
       />
 
       <div className="arcade-hud arcade-ui sky-jump-hud">
@@ -452,7 +465,7 @@ export function ArcadeScreen({
             </button>
           </div>
         </div>
-        {started && !over && !pauseMenu && !help && hud.time < 4 && <p className="sky-swipe-hint">← →</p>}
+        {started && !over && !pauseMenu && !help && hud.time < 4 && <p className="sky-swipe-hint">DESLIZÁ / MOVÉ EL MOUSE · ← →</p>}
       </div>
 
       {!started && (
@@ -494,8 +507,8 @@ export function ArcadeScreen({
           <div className="dialog sky-help-dialog">
             <p className="kicker">SKY JUMP</p>
             <h2>Cómo se juega</h2>
-            <p>Hijitus rebota solo. Movelo con ← → o A / D, o deslizá el dedo. Puede salir por un costado y entrar por el otro.</p>
-            <p>Vereda, techo, taxi, colectivo, balcón y avión se pisan. Los vidrios celestes cortan el salto, salvo con el Sol de Mayo. El globo impulsa.</p>
+            <p>Hijitus rebota solo. Movelo con ← → o A / D; en celular, deslizá el dedo; en PC, mové el mouse. Puede salir por un costado y entrar por el otro.</p>
+            <p>Vereda, techo, taxi, colectivo, balcón y avión se pisan. Algunos aviones tienen fuego: el Sol de Mayo te protege una vez. El globo impulsa.</p>
             <p>La inundación sube. El cielo cambia con los puntos: calle, techos, cielo y espacio.</p>
             <button className="tap" type="button" onClick={() => { setHelp(false); setPauseMenu(true); }}>Volver a la pausa</button>
           </div>
@@ -505,7 +518,7 @@ export function ArcadeScreen({
       {over && (
         <div className={over.isRecord ? "modal finale flood arcade-ui record-finale" : "modal finale flood arcade-ui"}>
           <div className="dialog sky-over-dialog">
-            {over.isRecord ? <><p className="kicker">ARCADE · SKY JUMP</p><h2 className="record-title">¡NUEVO RÉCORD!</h2><p>¡Bien ahí, {name}! Llegaste más alto que nunca.</p></> : <><p className="kicker">ARCADE · SKY JUMP</p><h2>{over.cause === "glass" ? "¡Cuidado con los vidrios!" : "La inundación te alcanzó"}</h2><p>{over.cause === "glass" ? "El Sol de Mayo no llegó a protegerte esta vez." : "La tormenta porteña ganó esta ronda. ¡Probá subir más rápido!"}</p></>}
+            {over.isRecord ? <><p className="kicker">ARCADE · SKY JUMP</p><h2 className="record-title">¡NUEVO RÉCORD!</h2><p>¡Bien ahí, {name}! Llegaste más alto que nunca.</p></> : <><p className="kicker">ARCADE · SKY JUMP</p><h2>{over.cause === "fire" ? "¡Cuidado con el fuego!" : "La inundación te alcanzó"}</h2><p>{over.cause === "fire" ? "El Sol de Mayo no llegó a protegerte de las llamas." : "La tormenta porteña ganó esta ronda. ¡Probá subir más rápido!"}</p></>}
             <ul className="arcade-stats">
               <li><span>Puntuación</span><b>{over.score}</b></li>
               <li><span>Zona</span><b>{skyZone(over.score).label}</b></li>
