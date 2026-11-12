@@ -1802,41 +1802,62 @@ body.storming::after {
   .arcade-pause-actions .tap { grid-column: 1 !important; }
 }
 
-/* Nuevo Arcade vertical: Sky Jump del barrio. Los estilos quedan aislados del resto de los modos. */
+/* Nuevo Arcade vertical: Sky Jump del barrio. */
 .arcade-root.sky-jump-root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   background:
     radial-gradient(ellipse at 50% 38%, rgba(96, 119, 139, .38), transparent 52%),
     linear-gradient(180deg, #172337 0%, #34465a 48%, #101d30 100%);
 }
+
 .arcade-root.sky-jump-root canvas.sky-jump-canvas {
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  position: relative;
+  inset: auto;
+  display: block;
+  flex: none;
+  width: min(100vw, 66.6667dvh);
+  height: min(100dvh, 150vw);
+  max-width: 100vw;
+  max-height: 100dvh;
+  aspect-ratio: 2 / 3;
   transform: none;
-  image-rendering: crisp-edges;
   image-rendering: pixelated;
   touch-action: none;
   cursor: crosshair;
 }
+
 .sky-jump-hud {
   z-index: 8;
 }
+
 .sky-jump-hud .arcade-top > div {
   border-color: #f5d36b;
   background: rgba(13, 25, 43, .88);
 }
+
 .sky-jump-hud .arcade-top b {
   color: #fff0b8;
   font-size: .7rem;
 }
+
 .sky-jump-hud .arcade-top span {
   color: #d0dce5;
 }
+
 .sky-shield-tag {
   color: #ffdc68 !important;
   font-weight: 900;
 }
+
 .sky-swipe-hint {
   width: fit-content;
   margin: 8px auto 0;
@@ -1849,6 +1870,7 @@ body.storming::after {
   text-align: center;
   text-shadow: 2px 2px #14263b;
 }
+
 .sky-overlay {
   position: absolute;
   inset: 0;
@@ -1859,6 +1881,7 @@ body.storming::after {
   background: rgba(9, 19, 34, .55);
   overflow-y: auto;
 }
+
 .sky-card {
   width: min(440px, 100%);
   max-height: min(90dvh, 760px);
@@ -1870,6 +1893,7 @@ body.storming::after {
   box-shadow: 7px 7px 0 rgba(0, 0, 0, .72);
   text-align: center;
 }
+
 .sky-card .kicker,
 .sky-help-dialog .kicker,
 .sky-over-dialog .kicker {
@@ -1878,22 +1902,26 @@ body.storming::after {
   font-size: .58rem;
   letter-spacing: .08em;
 }
+
 .sky-card h1 {
   margin: 8px 0 10px;
   color: #ffe07b;
   font: 400 clamp(1.1rem, 5vw, 1.55rem)/1.5 var(--font-pixel);
   text-shadow: 3px 3px #873f36;
 }
+
 .sky-card p {
   margin: 10px 0;
   color: #d5e0e7;
   font-size: .9rem;
   line-height: 1.5;
 }
+
 .sky-card .sky-lead {
   color: #fff4d0;
   font-weight: 800;
 }
+
 .sky-hero {
   display: flex;
   align-items: center;
@@ -1905,6 +1933,7 @@ body.storming::after {
   background: rgba(255, 255, 255, .06);
   text-align: left;
 }
+
 .sky-hero-sprite {
   width: 72px;
   height: 72px;
@@ -1915,16 +1944,30 @@ body.storming::after {
   box-shadow: inset 0 0 0 3px #d8b65e;
   image-rendering: pixelated;
 }
+
 .sky-hero b,
-.sky-hero small { display: block; }
-.sky-hero b { color: #ffe18a; font-size: .9rem; }
-.sky-hero small { margin-top: 3px; color: #d5e0e7; font-size: .76rem; }
+.sky-hero small {
+  display: block;
+}
+
+.sky-hero b {
+  color: #ffe18a;
+  font-size: .9rem;
+}
+
+.sky-hero small {
+  margin-top: 3px;
+  color: #d5e0e7;
+  font-size: .76rem;
+}
+
 .sky-card .sky-controls-copy {
   padding: 8px;
   border: 1px dashed rgba(255, 223, 135, .55);
   color: #ffedbe;
   font-size: .78rem;
 }
+
 .sky-start {
   width: 100%;
   min-height: 48px;
@@ -1940,31 +1983,39 @@ body.storming::after {
   font-family: var(--font-pixel);
   font-size: .7rem;
 }
+
 .sky-help-dialog h2,
 .sky-over-dialog h2 {
   font-family: var(--font-pixel);
   font-weight: 400;
   line-height: 1.55;
 }
-.sky-help-dialog p { line-height: 1.55; }
+
+.sky-help-dialog p {
+  line-height: 1.55;
+}
+
 .sky-over-dialog .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.sky-over-dialog .actions .tap { flex: 1 1 140px; }
-@media (min-aspect-ratio: 4/5) {
-  .arcade-root.sky-jump-root canvas.sky-jump-canvas {
-    left: 50%;
-    width: min(66.6667vh, 100vw);
-    height: 100%;
-    transform: translateX(-50%);
-    border-left: 2px solid rgba(238, 222, 179, .16);
-    border-right: 2px solid rgba(238, 222, 179, .16);
-  }
+
+.sky-over-dialog .actions .tap {
+  flex: 1 1 140px;
 }
+
 @media (max-width: 420px) {
-  .sky-card { padding: 16px; }
-  .sky-card p { font-size: .82rem; }
-  .sky-swipe-hint { margin-top: 5px; font-size: .49rem; }
+  .sky-card {
+    padding: 16px;
+  }
+
+  .sky-card p {
+    font-size: .82rem;
+  }
+
+  .sky-swipe-hint {
+    margin-top: 5px;
+    font-size: .49rem;
+  }
 }
