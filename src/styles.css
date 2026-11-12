@@ -1801,3 +1801,198 @@ body.storming::after {
   .arcade-pause-actions { grid-template-columns: 1fr; }
   .arcade-pause-actions .tap { grid-column: 1 !important; }
 }
+
+/* Nuevo Arcade vertical: Sky Jump del barrio. Los estilos quedan aislados del resto de los modos. */
+.arcade-root.sky-jump-root {
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(96, 119, 139, .38), transparent 52%),
+    linear-gradient(180deg, #172337 0%, #34465a 48%, #101d30 100%);
+}
+.arcade-root.sky-jump-root canvas.sky-jump-canvas {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: crosshair;
+}
+.sky-jump-hud {
+  z-index: 8;
+}
+.sky-jump-hud .arcade-top > div {
+  border-color: #f5d36b;
+  background: rgba(13, 25, 43, .88);
+}
+.sky-jump-hud .arcade-top b {
+  color: #fff0b8;
+  font-size: .7rem;
+}
+.sky-jump-hud .arcade-top span {
+  color: #d0dce5;
+}
+.sky-shield-tag {
+  color: #ffdc68 !important;
+  font-weight: 900;
+}
+.sky-swipe-hint {
+  width: fit-content;
+  margin: 8px auto 0;
+  padding: 5px 9px;
+  border: 2px solid rgba(255, 231, 164, .7);
+  background: rgba(10, 25, 43, .74);
+  color: #fff0bf;
+  font: 400 .55rem var(--font-pixel);
+  letter-spacing: .04em;
+  text-align: center;
+  text-shadow: 2px 2px #14263b;
+}
+.sky-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+  background: rgba(9, 19, 34, .55);
+  overflow-y: auto;
+}
+.sky-card {
+  width: min(440px, 100%);
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+  padding: clamp(18px, 4vw, 28px);
+  border: 4px solid #f4d36d;
+  background: linear-gradient(155deg, #1c344b, #0d1c30 82%);
+  color: #f8f0d9;
+  box-shadow: 7px 7px 0 rgba(0, 0, 0, .72);
+  text-align: center;
+}
+.sky-card .kicker,
+.sky-help-dialog .kicker,
+.sky-over-dialog .kicker {
+  color: #ffd85c;
+  font-family: var(--font-pixel);
+  font-size: .58rem;
+  letter-spacing: .08em;
+}
+.sky-card h1 {
+  margin: 8px 0 10px;
+  color: #ffe07b;
+  font: 400 clamp(1.1rem, 5vw, 1.55rem)/1.5 var(--font-pixel);
+  text-shadow: 3px 3px #873f36;
+}
+.sky-card p {
+  margin: 10px 0;
+  color: #d5e0e7;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+.sky-card .sky-lead {
+  color: #fff4d0;
+  font-weight: 800;
+}
+.sky-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 10px;
+  border: 2px solid rgba(244, 211, 109, .6);
+  background: rgba(255, 255, 255, .06);
+  text-align: left;
+}
+.sky-hero-sprite {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border: 3px solid #17283a;
+  background: #97b96c;
+  box-shadow: inset 0 0 0 3px #d8b65e;
+  font-size: 2rem;
+  image-rendering: pixelated;
+}
+.sky-hero b,
+.sky-hero small { display: block; }
+.sky-hero b { color: #ffe18a; font-size: .9rem; }
+.sky-hero small { margin-top: 3px; color: #d5e0e7; font-size: .76rem; }
+.sky-card .sky-controls-copy {
+  padding: 8px;
+  border: 1px dashed rgba(255, 223, 135, .55);
+  color: #ffedbe;
+  font-size: .78rem;
+}
+.sky-start {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 6px;
+  border: 3px solid #151e2a;
+  background: #f5cf4e;
+  color: #172337;
+  box-shadow: 4px 4px 0 #000;
+  font-family: var(--font-pixel);
+  font-size: .7rem;
+}
+.sky-help-dialog h2,
+.sky-over-dialog h2 {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  line-height: 1.55;
+}
+.sky-help-dialog p { line-height: 1.55; }
+.sky-over-dialog .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sky-over-dialog .actions .tap { flex: 1 1 140px; }
+@media (min-aspect-ratio: 4/5) {
+  .arcade-root.sky-jump-root canvas.sky-jump-canvas {
+    left: 50%;
+    width: min(66.6667vh, 100vw);
+    height: 100%;
+    transform: translateX(-50%);
+    border-left: 2px solid rgba(238, 222, 179, .16);
+    border-right: 2px solid rgba(238, 222, 179, .16);
+  }
+}
+@media (max-width: 420px) {
+  .sky-card { padding: 16px; }
+  .sky-card p { font-size: .82rem; }
+  .sky-swipe-hint { margin-top: 5px; font-size: .49rem; }
+}
+
+.sky-turtle-mini {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 30px;
+  background: #6a9c5a;
+  clip-path: polygon(25% 15%, 62% 15%, 78% 31%, 94% 31%, 94% 58%, 76% 58%, 69% 80%, 52% 80%, 46% 62%, 20% 62%, 11% 81%, 0 81%, 7% 49%, 0 33%, 16% 33%);
+  image-rendering: pixelated;
+}
+.sky-turtle-mini::before {
+  content: "";
+  position: absolute;
+  left: 2px; top: 9px; width: 19px; height: 15px;
+  background: #805b3e; border: 3px solid #4d3d31;
+  box-shadow: inset 0 0 0 3px #a47a4c;
+}
+.sky-turtle-mini::after {
+  content: "";
+  position: absolute;
+  left: 19px; top: 4px; width: 11px; height: 11px;
+  background: #72ae68; border: 2px solid #416f49;
+  box-shadow: 6px 6px 0 -4px #172337;
+}
+.sky-turtle-mini i {
+  position: absolute; left: 14px; top: 20px; width: 14px; height: 5px;
+  background: #e5bb4e; border: 2px solid #78552d; z-index: 2;
+}
