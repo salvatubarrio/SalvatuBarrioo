@@ -1810,11 +1810,15 @@ body.storming::after {
     linear-gradient(180deg, #172337 0%, #34465a 48%, #101d30 100%);
 }
 .arcade-root.sky-jump-root canvas.sky-jump-canvas {
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: none;
-  image-rendering: crisp-edges;
+  position: absolute;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, 66.6667vh);
+  height: min(100vh, 150vw);
+  max-width: 100vw;
+  max-height: 100vh;
+  transform: translate(-50%, -50%);
   image-rendering: pixelated;
   touch-action: none;
   cursor: crosshair;
